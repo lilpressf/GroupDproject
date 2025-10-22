@@ -1,16 +1,13 @@
 name: Deploy AWS Infrastructure
 
 on:
-  push:
-    branches:
-      - test
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write     # Required for GitHub OIDC to assume role
+      id-token: write     
       contents: read
 
     steps:

@@ -7,7 +7,7 @@ jobs:
   destroy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write       # Needed for GitHub OIDC
+      id-token: write      
       contents: read
 
     steps:
