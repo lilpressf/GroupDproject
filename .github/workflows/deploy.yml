@@ -1,16 +1,25 @@
 name: Deploy AWS Infrastructure
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write     
+      id-token: write
       contents: read
 
     steps:
+      - name: Validate branch
+        run: |
+          BRANCH_NAME="${GITHUB_REF##*/}"
+          echo "Running on branch: $BRANCH_NAME"
+          if [ "$BRANCH_NAME" != "test" ]; then
+            echo "ERROR: This workflow can only run on the 'test' branch."
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v3
 
@@ -26,19 +35,19 @@ jobs:
           terraform_version: 1.8.5
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -reconfigure
+        working-directory: ./terraform
+
+      - name: Terraform Destroy 
+        run: |
+          echo "Destroying existing infrastructure (if any)..."
+          terraform destroy -auto-approve || echo "No existing infrastructure to destroy."
         working-directory: ./terraform
 
       - name: Terraform Plan
         run: terraform plan -out=tfplan
         working-directory: ./terraform
 
-      - name: Terraform Apply (with automatic destroy on failure)
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
         working-directory: ./terraform
-        run: |
-          set -e
-          terraform apply -auto-approve tfplan || {
-            echo "Terraform apply failed, running terraform destroy..."
-            terraform destroy -auto-approve
-            exit 1
-          }
