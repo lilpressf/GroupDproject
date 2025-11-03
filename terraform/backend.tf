@@ -1,8 +1,8 @@
 terraform {
   backend "s3" {
-    bucket = "NEEDS TO BE FILLED"
-    key    = "NEEDS TO BE FILLED"
-    region = "NEEDS TO BE FILLED"
+    bucket = "terraform-state-bucket-groupd"
+    key    = "env/test/terraform.tfstate"
+    region = "eu-central-1"
     encrypt = true
   }
 }
