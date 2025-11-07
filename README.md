@@ -1,19 +1,10 @@
-🚧 Group D GitHub Guide — Branch per Task System
+## 🧩 Branch setup
 
-We are now using a branch-per-task system.
-This means you will create a new branch for each feature, bug fix, or task you work on — instead of having a permanent personal branch.
+- **main** → final, stable version (no one commits directly)  
+- **dev** (or **test**) → shared integration branch  
+- **feature/your-name/task** → short-term branches for each piece of work  
 
-This keeps the repo organized, makes code reviews easier, and prevents conflicts.
-
-🧩 Branch setup
-
-main → final, stable version (no one commits directly)
-
-dev (or test) → shared integration branch
-
-feature/your-name/task → short-term branches for each piece of work
-
-Example branches:
+**Example branches:**
 
 feature/daan/login-page
 feature/anouar/navbar-fix
