@@ -1,168 +1,121 @@
-We are now using a branch-per-task system. 
- This means you will create a new branch for each feature, bug fix, or task you work on, instead of having a personal branch. 
+# 🚧 Group D GitHub Guide — Branch per Task System
 
-This keeps the repo organized, makes code reviews easier, and prevents conflicts. 
+We are now using a **branch-per-task system**.  
+This means you will create a new branch for each feature, bug fix, or task you work on — instead of having a permanent personal branch.
 
- 
+This keeps the repo organized, makes code reviews easier, and prevents conflicts.
 
-Branch setup 
+---
 
-main → final, stable version (no one commits directly) 
+## 🧩 Branch setup
 
-dev (or test) → shared integration branch 
+- **main** → final, stable version (no one commits directly)  
+- **dev** (or **test**) → shared integration branch  
+- **feature/your-name/task** → short-term branches for each piece of work  
 
-feature/<your-name>/<task> → short-term branches for each piece of work 
+**Example branches:**
+feature/daan/login-page
+feature/anouar/navbar-fix
+feature/pieter/api-auth
 
-Example: 
+yaml
+Copy code
 
-feature/daan/login-page 
-feature/anouar/navbar-fix 
-feature/pieter/api-auth 
- 
+After your task is merged, that branch is deleted.
 
-After your task is merged, that branch is deleted. 
+---
 
- 
+## 🧭 Starting a new task
 
-Starting a new task 
+Make sure you’re up to date:
+```bash
+git checkout dev
+git pull origin dev
+Create a new branch for your task:
 
-Make sure you’re up to date: 
+bash
+Copy code
+git checkout -b feature/your-name/task-name
+Example:
 
-git checkout dev 
-git pull origin dev 
- 
+bash
+Copy code
+git checkout -b feature/daan/login-form
+This creates a branch off the latest dev code.
 
-Create a new branch for your task: 
+💻 Working on your task
+Work normally and commit your changes often:
 
-git checkout -b feature/<your-name>/<task-name> 
- 
+bash
+Copy code
+git add .
+git commit -m "Implement login form layout"
+Push your branch to GitHub:
 
-Example: 
+bash
+Copy code
+git push -u origin feature/your-name/task-name
+🔄 Keeping your branch up to date
+If someone else’s work was merged into dev while you were coding, update your branch:
 
-git checkout -b feature/daan/login-form 
- 
+bash
+Copy code
+git fetch origin
+git rebase origin/dev
+If conflicts appear, fix them manually, then continue:
 
-This creates a branch off the latest dev code. 
+bash
+Copy code
+git add .
+git rebase --continue
+💡 This keeps your branch clean and based on the latest code.
 
- 
+🚀 Merging your task into dev
+When your task is finished and tested:
 
-Working on your task 
+Go to the Pull Requests page:
+👉 https://github.com/lilpressf/GroupDproject/pulls
 
-Work normally, commit your changes often: 
+Click “New Pull Request”
 
-git add . 
-git commit -m "Implement login form layout" 
- 
+Base branch: dev
+Compare branch: your feature branch (e.g. feature/daan/login-form)
 
-Push your branch to GitHub: 
+Add a clear title and description of your changes
 
-git push -u origin feature/<your-name>/<task-name> 
- 
+Request a review from another team member
 
- 
+Once approved and tests pass → merge into dev
 
-Keeping your branch up to date 
+⚠️ Important merge rules
+Only one PR to dev at a time
 
-If someone else’s work was merged into dev while you were coding, you need to update your branch. 
+Always check that no other pull requests are open before merging
 
-Run: 
+After a merge, everyone must update their local dev branch:
 
-git fetch origin 
-git rebase origin/dev 
- 
-
-If conflicts appear, fix them manually, then continue: 
-
-git add . 
-git rebase --continue 
- 
-
-This keeps your branch clean and based on the latest code. 
-
- 
-
-Merging your task into dev 
-
-When your task is finished and tested: 
-
-Go to the Pull Requests page: 
- https://github.com/lilpressf/GroupDproject/pulls 
-
-Click “New Pull Request” 
-
-Base branch: dev 
-
-Compare branch: your feature branch (e.g. feature/daan/login-form) 
-
-Add a clear title and description of your changes 
-
-Request review from another team member 
-
-Once approved and tests pass → merge into dev 
-
- 
-
-Important merge rules 
-
-Only one PR to dev at a time 
-
-Always check that no other open PRs exist before merging 
-
-After a merge, everyone must update their local dev branch: 
-
-git checkout dev 
-git pull origin dev 
- 
-
- 
-
-🧹 After merging 
-
-Once your branch is merged: 
-
-Delete it in GitHub (you can tick “Delete branch” after merging) 
-
-Locally, you can delete it with: 
-
-git branch -d feature/<your-name>/<task-name> 
- 
-
-Then pull the latest dev and start your next branch. 
-
- 
-
-✅ Quick Summary 
-
-Task 
-
-Command 
-
-Create new branch 
-
-git checkout -b feature/<name>/<task> dev 
-
-Commit changes 
-
-git add . && git commit -m "message" 
-
-Push to GitHub 
-
-git push -u origin feature/<name>/<task> 
-
-Update branch 
-
-git fetch origin && git rebase origin/dev 
-
-Create PR 
-
-feature → dev 
-
-Update local dev 
-
-git checkout dev && git pull origin dev 
-
-Delete old branch 
-
-git branch -d feature/<name>/<task> 
-
- 
+bash
+Copy code
+git checkout dev
+git pull origin dev
+🧹 After merging
+Once your branch is merged:
+
+Delete it in GitHub (tick “Delete branch” after merging)
+
+Delete it locally:
+
+bash
+Copy code
+git branch -d feature/your-name/task-name
+Pull the latest dev branch:
+
+bash
+Copy code
+git checkout dev
+git pull origin dev
+Start your next task:
+
+bash
+Copy code
+git checkout -b feature/your-name/new-task
