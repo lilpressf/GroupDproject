@@ -17,7 +17,7 @@ variable "instance_count" {
 }
 
 variable "subnet_id" {
-  description = "VPC subnet to place instances in 
+  description = "VPC subnet to place instances in" 
   type        = string
   default     = null
 }
