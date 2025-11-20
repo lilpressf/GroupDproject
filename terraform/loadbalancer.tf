@@ -1,7 +1,7 @@
 resource "aws_lb" "loadbalancer" {
   name               = "Loadbalancer"
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.loadbalancerSG.id]
+  security_groups    = [aws_security_group.loadbalancer-SG.id]
   subnets            = [aws_subnet.sub_private_1.id, aws_subnet.sub_private_2.id]
   idle_timeout       = 60
 }
