@@ -102,11 +102,15 @@ resource "aws_security_group" "Monitoring-SG" {
     vpc_id = aws_vpc.vpc_narre_main.id
 
     ingress {
+      from_port = 0
+      to_port = 0
         protocol = "-1"
         cidr_blocks = [var.vpc_cidr]
     }
 
     egress {
+      from_port = 0
+      to_port = 0
         protocol = "-1"
         cidr_blocks = [var.vpc_cidr]
     }
@@ -118,6 +122,8 @@ resource "aws_security_group" "Management-SG" {
     vpc_id = aws_vpc.vpc_narre_main.id
 
     egress {
+      from_port = 0
+      to_port = 0
         protocol = "-1"
         cidr_blocks = [var.vpc_cidr]
     }
