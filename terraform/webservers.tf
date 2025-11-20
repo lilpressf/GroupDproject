@@ -21,7 +21,6 @@ resource "aws_instance" "web1" {
   subnet_id              = aws_subnet.sub_private_1.id
   private_ip             = "10.0.5.1"
   vpc_security_group_ids = [aws_security_group.Web-SG.id]
-  key_name               = "Project1"
   user_data              = local.user_data
   tags = { Name = "lab-g1-web-easy-01" }
 }
@@ -32,7 +31,6 @@ resource "aws_instance" "web2" {
   subnet_id              = aws_subnet.sub_private_2.id
   private_ip             = "10.0.6.1"
   vpc_security_group_ids = [aws_security_group.Web-SG.id]
-  key_name               = "Project1"
   user_data              = local.user_data
   tags = { Name = "lab-g1-web-easy-02" }
 }
