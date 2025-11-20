@@ -7,6 +7,11 @@ locals {
 
     systemctl start nginx
     systemctl enable nginx
+
+    MY_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+
+    echo "<h1>Welkom bij mijn website!</h1>" > /usr/share/nginx/html/index.html
+    echo "<p>Deze webserver IP: $MY_IP</p>" >> /usr/share/nginx/html/index.html
   EOT
 }
 # aws_security_group moet nog aangepast worden
