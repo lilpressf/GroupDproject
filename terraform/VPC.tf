@@ -18,7 +18,7 @@ resource "aws_subnet" "sub_public_1" {
 
 resource "aws_subnet" "sub_public_2" {
       vpc_id            = aws_vpc.vpc_narre_main.id
-  cidr_block        = "10.0.2.10/24"
+  cidr_block        = "10.0.2.0/24"
   availability_zone = var.zone2
 
   tags = {
@@ -28,7 +28,7 @@ resource "aws_subnet" "sub_public_2" {
 
 resource "aws_subnet" "sub_management_1" {
       vpc_id            = aws_vpc.vpc_narre_main.id
-  cidr_block        = "10.0.3.10/24"
+  cidr_block        = "10.0.3.0/24"
   availability_zone = var.zone1
 
   tags = {
@@ -37,7 +37,7 @@ resource "aws_subnet" "sub_management_1" {
 }
 resource "aws_subnet" "sub_monitoring_1" {
       vpc_id            = aws_vpc.vpc_narre_main.id
-  cidr_block        = "10.0.4.10/24"
+  cidr_block        = "10.0.4.0/24"
   availability_zone = var.zone1
 
   tags = {
