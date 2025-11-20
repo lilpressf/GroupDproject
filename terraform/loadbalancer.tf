@@ -1,8 +1,8 @@
 resource "aws_lb" "loadbalancer" {
   name               = "Loadbalancer"
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.loadbalancer-SG.id]
-  subnets            = [aws_subnet.sub_private_1.id, aws_subnet.sub_private_2.id]
+  security_groups    = [aws_security_group.loadbalancer_sg.id]
+  subnets            = [aws_subnet.sub_public_1.id, aws_subnet.sub_public_2.id]
   idle_timeout       = 60
 }
 
@@ -30,7 +30,6 @@ resource "aws_lb_target_group_attachment" "web2" {
   target_id        = aws_instance.web2.id
   port             = 80
 }
-
 
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.loadbalancer.arn

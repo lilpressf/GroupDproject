@@ -1,4 +1,4 @@
-resource "aws_security_group" "SSH-Acces-SG" {
+resource "aws_security_group" "ssh_acces_sg" {
   name        = "Allow-SSH"
   description = "Allow connection on port 22"
   vpc_id      = aws_vpc.vpc_narre_main.id
@@ -22,7 +22,7 @@ resource "aws_security_group" "SSH-Acces-SG" {
   }
 }
 
-resource "aws_security_group" "loadbalancer-SG" {
+resource "aws_security_group" "loadbalancer_sg" {
   name        = "loadbalancerSG"
   description = "Allow HTTP from internet"
   vpc_id      = aws_vpc.vpc_narre_main.id
@@ -34,7 +34,6 @@ resource "aws_security_group" "loadbalancer-SG" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -43,7 +42,7 @@ resource "aws_security_group" "loadbalancer-SG" {
   }
 }
 
-resource "aws_security_group" "Web-SG" {
+resource "aws_security_group" "web_sg" {
   name        = "WebSG"
   description = "Allow HTTP from loadbalancer"
   vpc_id      = aws_vpc.vpc_narre_main.id
@@ -52,9 +51,8 @@ resource "aws_security_group" "Web-SG" {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
-    security_groups = [aws_security_group.loadbalancer-SG.id]
+    security_groups = [aws_security_group.loadbalancer_sg.id]
   }
-
 
   egress {
     from_port   = 0
@@ -64,10 +62,10 @@ resource "aws_security_group" "Web-SG" {
   }
 }
 
-resource "aws_security_group" "Database-SG" {
-    name = "Database-SG"
-    description = "Allow connection on port 3306"
-  vpc_id = aws_vpc.vpc_narre_main.id
+resource "aws_security_group" "database_sg" {
+  name        = "Database-SG"
+  description = "Allow connection on port 3306"
+  vpc_id      = aws_vpc.vpc_narre_main.id
 
   ingress {
     from_port   = 3306
@@ -84,35 +82,35 @@ resource "aws_security_group" "Database-SG" {
   }
 }
 
-resource "aws_security_group" "Monitoring-SG" {
-  name = "Monitoring-SG"
+resource "aws_security_group" "monitoring_sg" {
+  name        = "Monitoring-SG"
   description = "Allow access from and to monitoring subnet to the network"
-  vpc_id = aws_vpc.vpc_narre_main.id
+  vpc_id      = aws_vpc.vpc_narre_main.id
 
   ingress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = [var.vpc_cidr]
   }
 
   egress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = [var.vpc_cidr]
   }
 }
 
-resource "aws_security_group" "Management-SG" {
-    name = "Management-SG"
-    description = "Allow access from management subnet"
-    vpc_id = aws_vpc.vpc_narre_main.id
+resource "aws_security_group" "management_sg" {
+  name        = "Management-SG"
+  description = "Allow access from management subnet"
+  vpc_id      = aws_vpc.vpc_narre_main.id
 
-    egress {
-      from_port = 0
-      to_port = 0
-      protocol = "-1"
-      cidr_blocks = [var.vpc_cidr]
-    }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
 }
