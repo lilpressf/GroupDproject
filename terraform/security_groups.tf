@@ -34,12 +34,6 @@ resource "aws_security_group" "loadbalancer-SG" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-    ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   egress {
     from_port   = 0
@@ -61,12 +55,6 @@ resource "aws_security_group" "Web-SG" {
     security_groups = [aws_security_group.loadbalancer-SG.id]
   }
 
-    ingress {
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.loadbalancer-SG.id]
-  }
 
   egress {
     from_port   = 0
