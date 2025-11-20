@@ -97,23 +97,23 @@ resource "aws_security_group" "Database-SG" {
 }
 
 resource "aws_security_group" "Monitoring-SG" {
-    name = "Monitoring-SG"
-    description = "Allow access from and to monitoring subnet to the network"
-    vpc_id = aws_vpc.vpc_narre_main.id
+  name = "Monitoring-SG"
+  description = "Allow access from and to monitoring subnet to the network"
+  vpc_id = aws_vpc.vpc_narre_main.id
 
-    ingress {
-      from_port = 0
-      to_port = 0
-        protocol = "-1"
-        cidr_blocks = [var.vpc_cidr]
-    }
+  ingress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
 
-    egress {
-      from_port = 0
-      to_port = 0
-        protocol = "-1"
-        cidr_blocks = [var.vpc_cidr]
-    }
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
 }
 
 resource "aws_security_group" "Management-SG" {
@@ -124,7 +124,7 @@ resource "aws_security_group" "Management-SG" {
     egress {
       from_port = 0
       to_port = 0
-        protocol = "-1"
-        cidr_blocks = [var.vpc_cidr]
+      protocol = "-1"
+      cidr_blocks = [var.vpc_cidr]
     }
 }
