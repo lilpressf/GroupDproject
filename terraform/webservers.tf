@@ -22,7 +22,7 @@ resource "aws_instance" "web1" {
   subnet_id              = aws_subnet.sub_private_1.id
   vpc_security_group_ids = [aws_security_group.Web-SG.id, aws_security_group.SSH-Acces-SG.id]
   user_data              = local.user_data
-  associate_public_ip_address = true
+
   tags = { Name = "lab-g1-web-easy-01" }
 }
 
@@ -33,6 +33,6 @@ resource "aws_instance" "web2" {
   subnet_id              = aws_subnet.sub_private_2.id
   vpc_security_group_ids = [aws_security_group.Web-SG.id, aws_security_group.SSH-Acces-SG.id]
   user_data              = local.user_data
-  associate_public_ip_address = true
+
   tags = { Name = "lab-g1-web-easy-02" }
 }
