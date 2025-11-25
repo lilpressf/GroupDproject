@@ -114,3 +114,28 @@ resource "aws_security_group" "management_sg" {
     cidr_blocks = [var.vpc_cidr]
   }
 }
+
+resource "aws_security_group" "nat_sg" {
+  name        = "nat-instance-sg"
+  description = "Allow outbound internet for private subnets"
+  vpc_id      = aws_vpc.vpc_narre_main.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "nat-instance-sg"
+  }
+}
+
