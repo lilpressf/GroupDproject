@@ -48,12 +48,6 @@ jobs:
         run: terraform init -reconfigure
         working-directory: ./terraform
 
-      - name: Terraform Destroy 
-        run: |
-          echo "Destroying existing infrastructure (if any)..."
-          terraform destroy -auto-approve || echo "No existing infrastructure to destroy."
-        working-directory: ./terraform
-
       - name: Terraform Plan
         run: terraform plan -out=tfplan
         working-directory: ./terraform
