@@ -17,3 +17,24 @@ resource "aws_db_instance" "mydb" {
     Name = "narre-db"
   }
 }
+
+resource "null_resource" "db_init" {
+  # Only rerun if the DB instance changes or the schema file changes
+  triggers = {
+    db_instance_id = aws_db_instance.mydb.id
+    schema_hash    = filesha1("${path.module}/db/schema.sql")
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      mysql \
+        --host='${aws_db_instance.mydb.address}' \
+        --port='${aws_db_instance.mydb.port}' \
+        --user='${var.db_username}' \
+        --password='${var.db_password}' \
+        '${aws_db_instance.mydb.name}' < '${path.module}/db/schema.sql'
+    EOT
+  }
+
+  depends_on = [aws_db_instance.mydb]
+}
