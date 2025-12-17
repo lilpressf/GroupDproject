@@ -43,3 +43,33 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "cluster_name" {
+  description = "EKS cluster name"
+  type        = string
+  default     = "cs3-nca-eks"
+}
+
+variable "node_instance_type" {
+  description = "EKS worker node instance type"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "node_desired_size" {
+  description = "EKS node group desired size"
+  type        = number
+  default     = 2
+}
+
+variable "node_min_size" {
+  description = "EKS node group min size"
+  type        = number
+  default     = 1
+}
+
+variable "node_max_size" {
+  description = "EKS node group max size"
+  type        = number
+  default     = 3
+}

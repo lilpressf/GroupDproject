@@ -50,3 +50,20 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
         working-directory: ./terraform
+
+      - name: Wait for EKS readiness
+        run: |
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          NODE_GROUP_NAME=$(terraform output -raw node_group_name)
+          aws eks wait cluster-active --name "$CLUSTER_NAME" --region "${{ secrets.AWS_REGION }}"
+          aws eks wait nodegroup-active --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NODE_GROUP_NAME" --region "${{ secrets.AWS_REGION }}"
+        working-directory: ./terraform
+
+      - name: Configure kubeconfig
+        run: |
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "${{ secrets.AWS_REGION }}"
+        working-directory: ./terraform
+
+      - name: Deploy Kubernetes manifests
+        run: kubectl apply -f k8s

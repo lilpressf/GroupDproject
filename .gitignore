@@ -1,0 +1,19 @@
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.backup
+
+# Frontend build/output
+app/frontend/node_modules/
+app/frontend/dist/
+
+# Local/derived Terraform artifacts and temp files
+infra410/
+tmp.json
+patch-ingress.json
+backend-policy.json
+backend-trust.json
+job-controller-policy.json
+job-controller-trust.json
+job-worker-trust.json
