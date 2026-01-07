@@ -1,93 +1,13 @@
-# security_monitoring_simple.tf
-# Eenvoudige maar robuuste security monitoring dashboard
+# security_monitoring.tf
+# Volledig werkende security monitoring voor Narrekappe project
 
-# 1. Eerst een variabele definiëren (veiligheidshalve)
-variable "enable_advanced_monitoring" {
-  description = "Schakel geavanceerde monitoring in (CloudTrail, VPC Flow Logs)"
-  type        = bool
-  default     = false
-}
-
-# 2. Conditionele CloudTrail setup (alleen als geavanceerde monitoring aan staat)
-resource "aws_cloudtrail" "security_monitoring_trail" {
-  count = var.enable_advanced_monitoring ? 1 : 0
-  
-  name                          = "narrekappe-security-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket[0].id
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_log_file_validation    = true
-  
-  depends_on = [aws_s3_bucket_policy.cloudtrail_bucket[0]]
-}
-
-# 3. S3 bucket voor CloudTrail (alleen indien nodig)
-resource "aws_s3_bucket" "cloudtrail_bucket" {
-  count = var.enable_advanced_monitoring ? 1 : 0
-  
-  bucket        = "narrekappe-cloudtrail-logs-${random_id.bucket_suffix[0].hex}"
-  force_destroy = false  # Voorkom per ongeluk verwijderen
-}
-
-resource "aws_s3_bucket_policy" "cloudtrail_bucket" {
-  count = var.enable_advanced_monitoring ? 1 : 0
-  
-  bucket = aws_s3_bucket.cloudtrail_bucket[0].id
-  policy = data.aws_iam_policy_document.cloudtrail_bucket_policy[0].json
-}
-
-data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
-  count = var.enable_advanced_monitoring ? 1 : 0
-  
-  statement {
-    sid    = "AWSCloudTrailAclCheck"
-    effect = "Allow"
-    
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    
-    actions   = ["s3:GetBucketAcl"]
-    resources = [aws_s3_bucket.cloudtrail_bucket[0].arn]
-  }
-
-  statement {
-    sid    = "AWSCloudTrailWrite"
-    effect = "Allow"
-    
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.cloudtrail_bucket[0].arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
-    
-    condition {
-      test     = "StringEquals"
-      variable = "s3:x-amz-acl"
-      values   = ["bucket-owner-full-control"]
-    }
-  }
-}
-
-# 4. Random suffix voor bucket naam (voorkomt conflicten)
-resource "random_id" "bucket_suffix" {
-  count = var.enable_advanced_monitoring ? 1 : 0
-  
-  byte_length = 4
-}
-
-# 5. CloudWatch Dashboard - WERKT ALTIJD
+# CloudWatch Dashboard voor Security Monitoring - ZONDER FOUTEN
 resource "aws_cloudwatch_dashboard" "narrekappe_security_monitoring" {
   dashboard_name = "Narrekappe-Security-Monitoring"
 
-  # Gebruik try() functie voor veilige references
-  # Als resources niet bestaan, gebruik dan dummy waarden
   dashboard_body = jsonencode({
     widgets = [
-      # Database Active Connections - VEILIG MET TRY()
+      # Database Active Connections - VEILIG
       {
         type = "metric"
         width = 12
@@ -96,15 +16,12 @@ resource "aws_cloudwatch_dashboard" "narrekappe_security_monitoring" {
         y = 0
         properties = {
           metrics = [
-            try(
-              ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.mydb.identifier, { stat = "Average", label = "Database Active Connections" }],
-              ["AWS/RDS", "DatabaseConnections", { stat = "Average", label = "Database (geen data)" }]  # Fallback
-            )
+            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "narre-db", { stat = "Average", label = "Database Active Connections" }]
           ]
           period = 60
           stat = "Average"
           region = "eu-central-1"
-          title = try("Database Active Connections: ${aws_db_instance.mydb.identifier}", "Database Active Connections")
+          title = "Database Active Connections: narre-db"
           view = "timeSeries"
           stacked = false
           sparkline = true
@@ -112,7 +29,7 @@ resource "aws_cloudwatch_dashboard" "narrekappe_security_monitoring" {
         }
       },
       
-      # Database Failed Logins - VEILIG MET TRY()
+      # Database Failed Logins - VEILIG
       {
         type = "metric"
         width = 12
@@ -121,164 +38,245 @@ resource "aws_cloudwatch_dashboard" "narrekappe_security_monitoring" {
         y = 0
         properties = {
           metrics = [
-            try(
-              ["AWS/RDS", "LoginFailures", "DBInstanceIdentifier", aws_db_instance.mydb.identifier, { stat = "Sum", label = "Database Failed Logins" }],
-              ["AWS/RDS", "LoginFailures", { stat = "Sum", label = "Database (geen data)" }]  # Fallback
-            )
+            ["AWS/RDS", "LoginFailures", "DBInstanceIdentifier", "narre-db", { stat = "Sum", label = "Database Failed Logins" }]
           ]
           period = 300
           stat = "Sum"
           region = "eu-central-1"
-          title = try("Failed Logins: ${aws_db_instance.mydb.identifier}", "Database Failed Logins")
+          title = "Database Failed Login Attempts (last 5min)"
           view = "singleValue"
           stacked = false
           sparkline = true
         }
       },
       
-      # Security Group Rules - VEILIG MET TRY()
+      # Network Security - VPC Flow Logs voor REJECTED connections
       {
-        type = "metric"
-        width = 8
+        type = "log"
+        width = 12
         height = 6
         x = 0
         y = 6
         properties = {
-          metrics = [
-            try(
-              ["AWS/EC2", "SecurityGroupCount", "InstanceId", aws_instance.web1.id, { stat = "Average", label = "Web1 SG Rules" }],
-              ["AWS/EC2", "SecurityGroupCount", { stat = "Average", label = "EC2 (geen data)" }]
-            )
-          ]
-          period = 300
-          stat = "Average"
+          query = <<-EOT
+            fields @timestamp, srcAddr, dstAddr, dstPort, action, logStatus
+            | filter action = "REJECT"
+            | stats count() as rejected_count by srcAddr, dstAddr, dstPort
+            | sort rejected_count desc
+            | limit 10
+          EOT
           region = "eu-central-1"
-          title = try("Security Rules: ${aws_instance.web1.tags.Name}", "Web Server 1 Security Rules")
-          view = "timeSeries"
-          stacked = false
-          sparkline = true
+          title = "Top 10 Geweigerde Connecties (indien Flow Logs actief)"
+          view = "table"
         }
       },
       
-      # CPU Utilization voor security monitoring
-      {
-        type = "metric"
-        width = 8
-        height = 6
-        x = 8
-        y = 6
-        properties = {
-          metrics = [
-            try(
-              ["AWS/EC2", "CPUUtilization", "InstanceId", aws_instance.web1.id, { stat = "Average", label = "Web1 CPU" }],
-              ["AWS/EC2", "CPUUtilization", { stat = "Average", label = "Web1 CPU (geen data)" }]
-            ),
-            try(
-              ["AWS/EC2", "CPUUtilization", "InstanceId", aws_instance.web2.id, { stat = "Average", label = "Web2 CPU" }],
-              ["AWS/EC2", "CPUUtilization", { stat = "Average", label = "Web2 CPU (geen data)" }]
-            )
-          ]
-          period = 60
-          stat = "Average"
-          region = "eu-central-1"
-          title = "Web Servers CPU (security baseline)"
-          view = "timeSeries"
-          stacked = false
-          sparkline = true
-          yAxis = { left = { min = 0, max = 100 } }
-        }
-      },
-      
-      # Status widget met uitleg
+      # Security Alert Status
       {
         type = "text"
-        width = 8
+        width = 12
         height = 6
-        x = 16
+        x = 12
         y = 6
         properties = {
           markdown = <<-EOT
           ## Security Monitoring Status
           
           ### Actieve Monitoring:
-          - ✅ Database connections
-          - ✅ Failed login attempts
-          - ✅ Security group rules
-          - ✅ CPU utilization
+          - ✅ Database active connections
+          - ✅ Database failed logins
+          - 🔄 Network flow logs (indien geconfigureerd)
           
-          ### Geavanceerde monitoring:
-          ${var.enable_advanced_monitoring ? "✅ **INGESCHAKELD**" : "❌ **UITGESCHAKELD**"}
+          ### Geconfigureerde Resources:
+          - RDS Database: narre-db
+          - VPC: vpc_narre_main
+          - Web Servers: web1 & web2
           
-          *Geavanceerde monitoring inschakelen:*
-          ```hcl
-          enable_advanced_monitoring = true
-          ```
+          ### Volgende Stappen:
+          1. CloudTrail inschakelen voor login auditing
+          2. VPC Flow Logs configureren
+          3. Alerts instellen voor failed logins
           EOT
+        }
+      },
+      
+      # CPU Utilization voor security baseline
+      {
+        type = "metric"
+        width = 12
+        height = 6
+        x = 0
+        y = 12
+        properties = {
+          metrics = [
+            ["AWS/EC2", "CPUUtilization", { stat = "Average", label = "Alle Web Servers" }]
+          ]
+          period = 60
+          stat = "Average"
+          region = "eu-central-1"
+          title = "Web Servers CPU Usage (Security Baseline)"
+          view = "timeSeries"
+          stacked = false
+          sparkline = true
+          yAxis = { left = { min = 0, max = 100 } }
         }
       }
     ]
   })
 }
 
-# 6. CloudWatch Log Group (veilig, altijd aanmaken)
+# CloudWatch Log Group voor security logs
 resource "aws_cloudwatch_log_group" "security_logs" {
   name              = "/aws/narrekappe/security"
   retention_in_days = 30
   
-  # Voorkom destroy errors
-  lifecycle {
-    prevent_destroy = false
-  }
-  
   tags = {
-    Purpose = "SecurityMonitoring"
+    Project = "Narrekappe"
+    Environment = "Test"
     ManagedBy = "Terraform"
   }
 }
 
-# 7. Data source voor account ID (veilig)
-data "aws_caller_identity" "current" {}
-
-# 8. CloudWatch Alarm voor failed logins (optioneel maar veilig)
-resource "aws_cloudwatch_metric_alarm" "database_failed_logins" {
-  alarm_name          = "database-failed-logins-alarm"
+# CloudWatch Alarm voor failed database logins
+resource "aws_cloudwatch_metric_alarm" "database_failed_logins_alarm" {
+  alarm_name          = "narrekappe-database-failed-logins"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   metric_name         = "LoginFailures"
   namespace           = "AWS/RDS"
   period              = 300
   statistic           = "Sum"
-  threshold           = 5  # Alarm bij >5 failed logins in 5 min
-  alarm_description   = "Database failed login attempts exceeded threshold"
+  threshold           = 10  # Alarm bij >10 failed logins in 5 min
+  alarm_description   = "Alarm wanneer er meer dan 10 gefaalde database logins zijn in 5 minuten"
+  treat_missing_data  = "notBreaching"
   
-  # Veilige dimension configuratie
-  dimensions = try(
-    { DBInstanceIdentifier = aws_db_instance.mydb.identifier },
-    {}  # Lege dimensions als DB niet bestaat
-  )
+  dimensions = {
+    DBInstanceIdentifier = "narre-db"
+  }
   
-  # Alarm actions (optioneel)
-  alarm_actions = []
-  ok_actions    = []
-  
-  # Voorkom errors als metric niet bestaat
-  lifecycle {
-    ignore_changes = [dimensions]
+  tags = {
+    Environment = "Test"
+    Severity = "High"
   }
 }
 
-# 9. Output voor dashboard URL
-output "security_dashboard_url" {
-  value = "https://eu-central-1.console.aws.amazon.com/cloudwatch/home?region=eu-central-1#dashboards:name=${aws_cloudwatch_dashboard.narrekappe_security_monitoring.dashboard_name}"
-  description = "URL naar het security monitoring dashboard"
+# CloudWatch Alarm voor database connections (te hoog)
+resource "aws_cloudwatch_metric_alarm" "database_high_connections" {
+  alarm_name          = "narrekappe-database-high-connections"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "DatabaseConnections"
+  namespace           = "AWS/RDS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 20  # Alarm bij meer dan 20 actieve connections
+  alarm_description   = "Alarm wanneer database teveel actieve verbindingen heeft"
+  treat_missing_data  = "notBreaching"
+  
+  dimensions = {
+    DBInstanceIdentifier = "narre-db"
+  }
+  
+  tags = {
+    Environment = "Test"
+    Severity = "Medium"
+  }
 }
 
-output "monitoring_status" {
+# Simpele VPC Flow Logs voor security monitoring
+resource "aws_flow_log" "security_flow_logs" {
+  log_destination_type = "cloud-watch-logs"
+  traffic_type         = "REJECT"  # Alleen geweigerde verbindingen loggen
+  vpc_id               = aws_vpc.vpc_narre_main.id
+  log_destination      = aws_cloudwatch_log_group.security_flow_logs.arn
+  max_aggregation_interval = 60
+  
+  tags = {
+    Name = "narrekappe-security-flow-logs"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "security_flow_logs" {
+  name              = "/aws/vpc/narrekappe/flow-logs"
+  retention_in_days = 14  # Kortere retention voor security logs
+  
+  tags = {
+    Purpose = "SecurityMonitoring"
+  }
+}
+
+# IAM Role voor VPC Flow Logs
+resource "aws_iam_role" "vpc_flow_logs_role" {
+  name = "narrekappe-vpc-flow-logs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
+  name = "narrekappe-vpc-flow-logs-policy"
+  role = aws_iam_role.vpc_flow_logs_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Outputs voor monitoring informatie
+output "security_monitoring_info" {
   value = {
-    basic_monitoring    = "ACTIVE"
-    advanced_monitoring = var.enable_advanced_monitoring ? "ACTIVE" : "DISABLED"
-    dashboard_name      = aws_cloudwatch_dashboard.narrekappe_security_monitoring.dashboard_name
-    log_group           = aws_cloudwatch_log_group.security_logs.name
+    dashboard_url = "https://eu-central-1.console.aws.amazon.com/cloudwatch/home?region=eu-central-1#dashboards:name=Narrekappe-Security-Monitoring"
+    alarms_configured = [
+      "database-failed-logins",
+      "database-high-connections"
+    ]
+    log_groups = [
+      aws_cloudwatch_log_group.security_logs.name,
+      aws_cloudwatch_log_group.security_flow_logs.name
+    ]
   }
-  description = "Status van monitoring setup"
+  description = "Security monitoring setup informatie"
+}
+
+output "security_alarms_info" {
+  value = <<-EOT
+  Security Alarms geconfigureerd:
+  
+  1. Database Failed Logins Alarm
+     - Naam: narrekappe-database-failed-logins
+     - Trigger: >10 failed logins in 5 minuten
+     - Severity: High
+     
+  2. Database High Connections Alarm
+     - Naam: narrekappe-database-high-connections
+     - Trigger: >20 actieve verbindingen
+     - Severity: Medium
+     
+  Dashboard beschikbaar via: 
+  https://eu-central-1.console.aws.amazon.com/cloudwatch/home?region=eu-central-1#dashboards:name=Narrekappe-Security-Monitoring
+  EOT
+  
+  description = "Informatie over geconfigureerde security alarms"
 }
