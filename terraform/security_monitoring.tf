@@ -4,7 +4,7 @@
 
 # 1. Create an S3 bucket for CloudTrail logs (Required)
 resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = "narrekappe-cloudtrail-logs-${data.aws_caller_identity.current.account_id}" # Unique name
+  bucket = "narrekappe-cloudtrail-logs" # Unique name
   force_destroy = false # Set to true for easier cleanup in non-production
 
   tags = {
