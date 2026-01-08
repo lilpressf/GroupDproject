@@ -53,7 +53,7 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.mydb.id, { stat = "Average", label = "Database CPU" }]
+            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.narre-db.id, { stat = "Average", label = "Database CPU" }]
           ]
           period = 60
           stat = "Average"
@@ -73,8 +73,8 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.mydb.id, { stat = "Average", label = "Database Connections" }],
-            ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", aws_db_instance.mydb.id, { stat = "Average", label = "Free Storage" }]
+            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.narre-db.id, { stat = "Average", label = "Database Connections" }],
+            ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", aws_db_instance.narre-db.id, { stat = "Average", label = "Free Storage" }]
           ]
           period = 60
           stat = "Average"
