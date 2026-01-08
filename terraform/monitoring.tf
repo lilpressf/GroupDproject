@@ -11,8 +11,8 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/EC2", "CPUUtilization", "InstanceId", aws_instance.web1.id, { stat = "Average", label = "Web1 CPU" }],
-            ["AWS/EC2", "CPUUtilization", "InstanceId", aws_instance.web2.id, { stat = "Average", label = "Web2 CPU" }]
+            ["AWS/EC2", "CPUUtilization", "InstanceId", aws_instance.web1.id],
+            ["AWS/EC2", "CPUUtilization", "InstanceId", aws_instance.web2.id]
           ]
           period = 60
           stat = "Average"
@@ -33,8 +33,8 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/EC2", "NetworkIn", "InstanceId", aws_instance.web1.id, { stat = "Sum", label = "Web1 Network In" }],
-            ["AWS/EC2", "NetworkOut", "InstanceId", aws_instance.web1.id, { stat = "Sum", label = "Web1 Network Out" }]
+            ["AWS/EC2", "NetworkIn", "InstanceId", aws_instance.web1.id],
+            ["AWS/EC2", "NetworkOut", "InstanceId", aws_instance.web1.id]
           ]
           period = 60
           stat = "Sum"
@@ -52,8 +52,8 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/EC2", "NetworkIn", "InstanceId", aws_instance.web2.id, { stat = "Sum", label = "Web2 Network In" }],
-            ["AWS/EC2", "NetworkOut", "InstanceId", aws_instance.web2.id, { stat = "Sum", label = "Web2 Network Out" }]
+            ["AWS/EC2", "NetworkIn", "InstanceId", aws_instance.web2.id],
+            ["AWS/EC2", "NetworkOut", "InstanceId", aws_instance.web2.id]
           ]
           period = 60
           stat = "Sum"
@@ -64,28 +64,6 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         }
       },
       
-# EC2 Instance metrics - Disk usage
-      {
-        type = "metric"
-        width = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["CWAgent", "disk_used_percent", "InstanceId", aws_instance.web1.id, { "path": "/", "stat": "Average", "label": "Web1 Disk %" }],
-            ["CWAgent", "disk_used_percent", "InstanceId", aws_instance.web2.id, { "path": "/", "stat": "Average", "label": "Web2 Disk %" }]
-          ]
-          period = 60
-          stat = "Average"
-          region = "eu-central-1"
-          title = "WebServer Disk Usage (%)"
-          view = "timeSeries"
-          stacked = false
-          yAxis = {
-            left = { min = 0, max = 100 }
-          }
-        }
-      },
-      
 # Database metrics - CPU
       {
         type = "metric"
@@ -93,7 +71,7 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier, { stat = "Average", label = "Database CPU" }]
+            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier]
           ]
           period = 60
           stat = "Average"
@@ -114,7 +92,7 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier, { stat = "Average", label = "Database Connections" }]
+            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier]
           ]
           period = 60
           stat = "Average"
@@ -125,7 +103,7 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         }
       },
       
-# Database metrics - Free Storage in GB (GECORRIGEERD)
+# Database metrics - Free Storage
       {
         type = "metric"
         width = 12
@@ -137,19 +115,9 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
           period = 60
           stat = "Average"
           region = "eu-central-1"
-          title = "Database Free Storage (GB)"
+          title = "Database Free Storage"
           view = "singleValue"
           stacked = false
-          # Toon in GB i.p.v. bytes
-          annotations = {
-            horizontal = [
-              {
-                color = "#2ca02c"
-                label = "20 GB allocated"
-                value = 21474836480  # 20 GB in bytes
-              }
-            ]
-          }
         }
       },
     ]
