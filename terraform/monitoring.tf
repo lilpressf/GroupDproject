@@ -46,14 +46,36 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         }
       },
       
-# Database metrics
+# Nieuwe metric: Disk usage voor webservers
       {
         type = "metric"
         width = 12
         height = 6
         properties = {
           metrics = [
-            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.narre-db.id, { stat = "Average", label = "Database CPU" }]
+            ["CWAgent", "disk_used_percent", "InstanceId", aws_instance.web1.id, "path", "/", { stat = "Average", label = "Web1 Disk %" }],
+            ["CWAgent", "disk_used_percent", "InstanceId", aws_instance.web2.id, "path", "/", { stat = "Average", label = "Web2 Disk %" }]
+          ]
+          period = 60
+          stat = "Average"
+          region = "eu-central-1"
+          title = "WebServer Disk Usage (%)"
+          view = "timeSeries"
+          stacked = false
+          yAxis = {
+            left = { min = 0, max = 100 }
+          }
+        }
+      },
+      
+# Database metrics - GECORRIGEERD: gebruik identifier in plaats van id
+      {
+        type = "metric"
+        width = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier, { stat = "Average", label = "Database CPU" }]
           ]
           period = 60
           stat = "Average"
@@ -73,14 +95,33 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.narre-db.id, { stat = "Average", label = "Database Connections" }],
-            ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", aws_db_instance.narre-db.id, { stat = "Average", label = "Free Storage" }]
+            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier, { stat = "Average", label = "Database Connections" }],
+            # Toon beschikbare GB in plaats van bytes
+            [".", "FreeStorageSpace", ".", ".", { stat = "Average", label = "Free Storage (GB)", yAxis = "right", unit = "Gigabytes" }]
           ]
           period = 60
           stat = "Average"
           region = "eu-central-1"
           title = "Database Performance"
           view = "timeSeries"
+          stacked = false
+        }
+      },
+      
+# Database vrije storage in GB
+      {
+        type = "metric"
+        width = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier, { stat = "Average", label = "Free Storage", unit = "Gigabytes" }]
+          ]
+          period = 60
+          stat = "Average"
+          region = "eu-central-1"
+          title = "Database Free Storage (GB)"
+          view = "singleValue"
           stacked = false
         }
       },
