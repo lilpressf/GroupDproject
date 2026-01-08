@@ -44,9 +44,10 @@ resource "aws_db_instance" "narre-db" {
   db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.database_sg.id]
   
-  publicly_accessible    = false
+  publicly_accessible    = true
+#   publicly_accessible    = false
   skip_final_snapshot    = true
-  deletion_protection    = false  # Zet op true voor productie
+  deletion_protection    = false
 
   enabled_cloudwatch_logs_exports = ["general", "slowquery"]
   parameter_group_name = aws_db_parameter_group.db_params.name
@@ -58,11 +59,19 @@ resource "aws_db_instance" "narre-db" {
 
 # Optioneel: Outputs voor gebruik elders
 output "db_endpoint" {
-  value = aws_db_instance.narre-db.endpoint
-  sensitive = true
+  value       = aws_db_instance.narre-db.endpoint
+  description = "Database endpoint voor connectie"
+  sensitive   = false
 }
 
-output "db_username" {
-  value = var.db_username
-  sensitive = true
+output "db_address" {
+  value       = aws_db_instance.narre-db.address
+  description = "Database hostname"
+  sensitive   = false
+}
+
+output "db_port" {
+  value       = aws_db_instance.narre-db.port
+  description = "Database poort"
+  sensitive   = false
 }
