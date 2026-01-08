@@ -34,22 +34,23 @@ resource "aws_db_instance" "mydb" {
   }
 }
 
-resource "null_resource" "db_init" {
-  triggers = {
-    db_instance_id = aws_db_instance.mydb.id
-    schema_hash    = filesha1("${path.module}/db/schema.sql")
-  }
+# this gives error:
+# resource "null_resource" "db_init" {
+#   triggers = {
+#     db_instance_id = aws_db_instance.mydb.id
+#     schema_hash    = filesha1("${path.module}/db/schema.sql")
+#   }
 
-  provisioner "local-exec" {
-    command = <<-EOT
-      mysql \
-        --host='${aws_db_instance.mydb.address}' \
-        --port='${aws_db_instance.mydb.port}' \
-        --user='${var.db_username}' \
-        --password='${var.db_password}' \
-        '${aws_db_instance.mydb.db_name}' < '${path.module}/db/schema.sql'
-    EOT
-  }
+#   provisioner "local-exec" {
+#     command = <<-EOT
+#       mysql \
+#         --host='${aws_db_instance.mydb.address}' \
+#         --port='${aws_db_instance.mydb.port}' \
+#         --user='${var.db_username}' \
+#         --password='${var.db_password}' \
+#         '${aws_db_instance.mydb.db_name}' < '${path.module}/db/schema.sql'
+#     EOT
+#   }
 
-  depends_on = [aws_db_instance.mydb]
-}
+#   depends_on = [aws_db_instance.mydb]
+# }
