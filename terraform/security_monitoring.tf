@@ -2,14 +2,51 @@
 # Prerequisite: Ensure you have a CloudTrail trail configured to log to CloudWatch.
 # You can use the `aws_cloudtrail` resource below.
 
+# Data source for current AWS account ID
+data "aws_caller_identity" "current" {}
+
 # 1. Create an S3 bucket for CloudTrail logs (Required)
 resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = "narrekappe-cloudtrail-logs" # Unique name
+  bucket = "narrekappe-cloudtrail-logs" # Unique name - you may need to change this
   force_destroy = false # Set to true for easier cleanup in non-production
 
   tags = {
     Name = "CloudTrail-Logs"
   }
+}
+
+# 1a. S3 bucket policy for CloudTrail access
+resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AWSCloudTrailAclCheck"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action    = "s3:GetBucketAcl"
+        Resource  = aws_s3_bucket.cloudtrail_logs.arn
+      },
+      {
+        Sid       = "AWSCloudTrailWrite"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.cloudtrail_logs.arn}/prefix/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
 }
 
 # 2. CloudTrail Trail for AWS Console Logins (Required)
@@ -121,36 +158,19 @@ resource "aws_cloudwatch_dashboard" "security_dashboard" {
           view   = "singleValue"
         }
       },
-      # Current RDS Database Connections[citation:2][citation:10]
-      {
-        type = "metric"
-        width = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier]
-          ]
-          period = 60
-          stat   = "Average"
-          region = "eu-central-1"
-          title  = "RDS Active Database Connections (narre-db)"
-          view   = "singleValue"
-        }
-      },
-      # Combined Time-Series View
+      # Combined Time-Series View (without RDS reference)
       {
         type = "metric"
         width = 24
         height = 6
         properties = {
           metrics = [
-            ["Narrekappe/Security", "ConsoleLoginFailureCount", { "stat": "Sum", "label": "Failed Logins" }],
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier, { "label": "DB Connections" }]
+            ["Narrekappe/Security", "ConsoleLoginFailureCount", { "stat": "Sum", "label": "Failed Logins" }]
           ]
           period = 300
           stat   = "Sum"
           region = "eu-central-1"
-          title  = "Security & Database Activity"
+          title  = "Security Activity - Failed Console Logins"
           view   = "timeSeries"
         }
       }
@@ -167,4 +187,14 @@ output "security_dashboard_url" {
 output "failed_login_alarm_name" {
   value       = aws_cloudwatch_metric_alarm.failed_login_alarm.alarm_name
   description = "Name of the CloudWatch alarm for failed logins"
+}
+
+output "cloudtrail_s3_bucket_name" {
+  value       = aws_s3_bucket.cloudtrail_logs.id
+  description = "Name of the S3 bucket for CloudTrail logs"
+}
+
+output "cloudwatch_log_group_name" {
+  value       = aws_cloudwatch_log_group.cloudtrail_security.name
+  description = "Name of the CloudWatch Log Group for security events"
 }
