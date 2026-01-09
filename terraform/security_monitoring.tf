@@ -136,6 +136,7 @@ resource "aws_cloudwatch_dashboard" "security_dashboard" {
   dashboard_name = "Narrekappe-Security"
 
   dashboard_body = jsonencode({
+    timezone = "LOCAL"
     widgets = [
       # Failed Login Attempts (From CloudTrail Metric Filter)
       {

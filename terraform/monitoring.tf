@@ -2,6 +2,7 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
   dashboard_name = "Narrekappe-Monitoring"
   
   dashboard_body = jsonencode({
+    timezone = "LOCAL"
     widgets = [
 
 # EC2 Instance metrics - CPU
