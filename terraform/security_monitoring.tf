@@ -1,21 +1,17 @@
 # security_monitoring.tf
-# Prerequisite: Ensure you have a CloudTrail trail configured to log to CloudWatch.
-# You can use the `aws_cloudtrail` resource below.
 
-# Data source for current AWS account ID
 data "aws_caller_identity" "current" {}
 
-# 1. Create an S3 bucket for CloudTrail logs (Required)
 resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = "narrekappe-cloudtrail-logs" # Unique name - you may need to change this
-  force_destroy = false # Set to true for easier cleanup in non-production
+  bucket = "narrekappe-cloudtrail-logs"
+  force_destroy = false
 
   tags = {
     Name = "CloudTrail-Logs"
   }
 }
 
-# 1a. S3 bucket policy for CloudTrail access
+#S3 bucket policy for CloudTrail access
 resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
   bucket = aws_s3_bucket.cloudtrail_logs.id
 
@@ -49,28 +45,27 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
   })
 }
 
-# 2. CloudTrail Trail for AWS Console Logins (Required)
+#CloudTrail Trail for AWS Console Logins (Required)
 resource "aws_cloudtrail" "security_monitoring_trail" {
   name           = "narrekappe-security-trail"
   s3_bucket_name = aws_s3_bucket.cloudtrail_logs.id
   s3_key_prefix  = "prefix"
-  include_global_service_events = true # Crucial for console logins
-  is_multi_region_trail         = true # Best practice
+  include_global_service_events = true
+  is_multi_region_trail         = true
 
-  # This delivers logs to CloudWatch for real-time metric filtering
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail_security.arn}:*"
   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_to_cloudwatch.arn
 
   depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]
 }
 
-# 3. CloudWatch Log Group for CloudTrail Events
+#CloudWatch Log Group for CloudTrail Events
 resource "aws_cloudwatch_log_group" "cloudtrail_security" {
   name              = "CloudTrail/NarrekappeSecurity"
   retention_in_days = 30
 }
 
-# 4. IAM Role for CloudTrail to write to CloudWatch Logs
+#IAM Role for CloudTrail to write to CloudWatch Logs
 resource "aws_iam_role" "cloudtrail_to_cloudwatch" {
   name = "CloudTrail-CloudWatchLogs-Role"
 
@@ -86,7 +81,7 @@ resource "aws_iam_role" "cloudtrail_to_cloudwatch" {
   })
 }
 
-# 5. IAM Policy for the role (attached via `aws_iam_role_policy`)
+#IAM Policy for the role
 resource "aws_iam_role_policy" "cloudtrail_to_cloudwatch_policy" {
   name = "WriteToCloudWatchLogs"
   role = aws_iam_role.cloudtrail_to_cloudwatch.id
@@ -104,7 +99,7 @@ resource "aws_iam_role_policy" "cloudtrail_to_cloudwatch_policy" {
   })
 }
 
-# 6. Metric Filter for Failed Console Logins (The Core Detection)
+#Metric Filter for Failed Console Logins
 resource "aws_cloudwatch_log_metric_filter" "failed_console_logins" {
   name           = "ConsoleLoginFailureCount"
   pattern        = "{ ($.eventName = ConsoleLogin) && ($.errorMessage = \"Failed authentication\") }"
@@ -117,18 +112,18 @@ resource "aws_cloudwatch_log_metric_filter" "failed_console_logins" {
   }
 }
 
-# 7. CloudWatch Alarm for Failed Logins
+#CloudWatch Alarm for Failed Logins
 resource "aws_cloudwatch_metric_alarm" "failed_login_alarm" {
   alarm_name          = "narrekappe-console-failed-logins"
   alarm_description   = "Alerts on multiple failed AWS console login attempts"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "1"
-  threshold           = "3" # Common threshold: 3 failures in 5 min[citation:5][citation:9]
+  threshold           = "3"
   period              = "300" # 5 minutes in seconds
   statistic           = "Sum"
   metric_name         = "ConsoleLoginFailureCount"
   namespace           = "Narrekappe/Security"
-  alarm_actions       = [] # Add an SNS topic ARN here for notifications
+  alarm_actions       = []
 
   tags = {
     Environment = "Test"
@@ -136,7 +131,7 @@ resource "aws_cloudwatch_metric_alarm" "failed_login_alarm" {
   }
 }
 
-# 8. Security Monitoring Dashboard
+#Security Monitoring Dashboard
 resource "aws_cloudwatch_dashboard" "security_dashboard" {
   dashboard_name = "Narrekappe-Security"
 
@@ -158,7 +153,7 @@ resource "aws_cloudwatch_dashboard" "security_dashboard" {
           view   = "singleValue"
         }
       },
-      # Combined Time-Series View (without RDS reference)
+
       {
         type = "metric"
         width = 24
