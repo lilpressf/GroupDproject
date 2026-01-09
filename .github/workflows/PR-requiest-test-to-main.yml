@@ -1,0 +1,27 @@
+name: Create PR from test to main
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create or update pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head test \
+            --title "Merge test into main" \
+            --body "This PR was automatically created to promote changes from **test** into **main**." \
+          || gh pr edit test \
+            --title "Merge test into main" \
+            --body "This PR was automatically updated to promote changes from **test** into **main**."
