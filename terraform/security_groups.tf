@@ -91,6 +91,30 @@ resource "aws_security_group" "keycloak_sg" {
 }
 
 
+resource "aws_security_group" "keycloak_public_sg" {
+  name        = "keycloak-public-sg"
+  description = "Allow public HTTP to Keycloak"
+  vpc_id      = aws_vpc.vpc_narre_main.id
+
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "keycloak-public-sg"
+  }
+}
+
 resource "aws_security_group" "web_sg" {
   name        = "WebSG"
   description = "Allow HTTP from loadbalancer"
