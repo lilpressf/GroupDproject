@@ -43,3 +43,19 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "keycloak_version" {
+  description = "Keycloak image tag from quay.io/keycloak/keycloak"
+  type        = string
+  default     = "24.0.5"
+}
+
+variable "keycloak_admin_username" {
+  type = string
+}
+
+variable "keycloak_admin_password" {
+  type      = string
+  sensitive = true
+}
+
