@@ -2,6 +2,10 @@ name: Create PR from test to main
 
 on:
   workflow_dispatch:
+  
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   create-pr:
@@ -25,3 +29,4 @@ jobs:
           || gh pr edit test \
             --title "Merge test into main" \
             --body "This PR was automatically updated to promote changes from **test** into **main**."
+
