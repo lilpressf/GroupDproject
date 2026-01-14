@@ -106,18 +106,7 @@ resource "aws_cloudwatch_dashboard" "main_dashboard" {
   })
 }
 
-# CloudWatch Log Group voor Monitoring logs
-resource "aws_cloudwatch_log_group" "monitoring_logs" {
-  name              = "Narrekappe/Monitoring-Alerts"
-  retention_in_days = 30
-  
-  tags = {
-    Environment = "Test"
-    Component   = "Monitoring"
-  }
-}
-
-# SNS Topic voor alle monitoring alerts
+# SNS Topic voor monitoring alerts
 resource "aws_sns_topic" "monitoring_alerts" {
   name = "narrekappe-monitoring-alerts"
   
@@ -223,11 +212,6 @@ resource "aws_cloudwatch_metric_alarm" "web2_no_traffic_alarm" {
 }
 
 # Outputs
-output "monitoring_log_group_name" {
-  value       = aws_cloudwatch_log_group.monitoring_logs.name
-  description = "Name of the CloudWatch Log Group for monitoring alerts"
-}
-
 output "monitoring_sns_topic_arn" {
   value       = aws_sns_topic.monitoring_alerts.arn
   description = "ARN of the SNS topic for monitoring alerts"
