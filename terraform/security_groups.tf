@@ -1,155 +1,221 @@
-# security_monitoring.tf
+resource "aws_security_group" "ssh_acces_sg" {
+  name        = "Allow-SSH"
+  description = "Allow connection on port 22"
+  vpc_id      = aws_vpc.vpc_narre_main.id
 
-# CloudWatch Log Group voor Security Monitoring logs
-resource "aws_cloudwatch_log_group" "security_monitoring_logs" {
-  name              = "Narrekappe/Security-Monitoring"
-  retention_in_days = 90  # Langer bewaren vanwege compliance
-  
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = {
-    Environment = "Test"
-    Component   = "Security"
-    LogType     = "Security-Events"
+    Name = "AllowSSHSG"
   }
 }
 
-# Metric Filter voor Security Triggers
-resource "aws_cloudwatch_log_metric_filter" "security_trigger" {
-  name           = "Security-Trigger-Activated"
-  pattern        = "{ $.timestamp = *, $.event = \"SECURITY_TRIGGER_ACTIVATED\", $.details = * }"
-  log_group_name = aws_cloudwatch_log_group.security_monitoring_logs.name
+resource "aws_security_group" "loadbalancer_sg" {
+  name        = "loadbalancerSG"
+  description = "Allow HTTP from internet"
+  vpc_id      = aws_vpc.vpc_narre_main.id
 
-  metric_transformation {
-    name      = "SecurityTriggerCount"
-    namespace = "Narrekappe/Security-Triggers"
-    value     = "1"
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-# CloudWatch Alarm voor Security Triggers
-resource "aws_cloudwatch_metric_alarm" "security_trigger_alarm" {
-  alarm_name          = "narrekappe-security-trigger"
-  alarm_description   = "Security trigger has been activated"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = "1"
-  threshold           = "1"
-  period              = "60"
-  statistic           = "Sum"
-  metric_name         = "SecurityTriggerCount"
-  namespace           = "Narrekappe/Security-Triggers"
-  alarm_actions       = []
-  
+resource "aws_security_group" "keycloak_alb_sg" {
+  name        = "keycloak-alb-sg"
+  description = "Allow HTTP to Keycloak ALB"
+  vpc_id      = aws_vpc.vpc_narre_main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = {
-    Environment = "Test"
-    Component   = "Security"
-    Priority    = "High"
+    Name = "keycloak-alb-sg"
   }
 }
 
-# Security Monitoring Dashboard (Aangepast - alleen de widget toevoegen)
-resource "aws_cloudwatch_dashboard" "security_dashboard" {
-  dashboard_name = "Narrekappe-Security"
+resource "aws_security_group" "keycloak_sg" {
+  name        = "keycloak-ec2-sg"
+  description = "Allow Keycloak traffic from ALB"
+  vpc_id      = aws_vpc.vpc_narre_main.id
 
-  dashboard_body = jsonencode({
-    timezone = "LOCAL"
-    widgets = [
-      # Failed Login Attempts (From CloudTrail Metric Filter)
-      {
-        type = "metric"
-        width = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["Narrekappe/Security", "ConsoleLoginFailureCount", { "stat": "Sum", "label": "Failed Console Logins" }]
-          ]
-          period = 300
-          stat   = "Sum"
-          region = "eu-central-1"
-          title  = "Failed AWS Console Login Attempts (Last 5 min)"
-          view   = "singleValue"
-        }
-      },
+  ingress {
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.keycloak_alb_sg.id]
+  }
 
-      {
-        type = "metric"
-        width = 24
-        height = 6
-        properties = {
-          metrics = [
-            ["Narrekappe/Security", "ConsoleLoginFailureCount", { "stat": "Sum", "label": "Failed Logins" }]
-          ]
-          period = 300
-          stat   = "Sum"
-          region = "eu-central-1"
-          title  = "Security Activity - Failed Console Logins"
-          view   = "timeSeries"
-        }
-      },
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-      # Database metrics - Connections (verplaatst van monitoring.tf)
-      {
-        type = "metric"
-        width = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier]
-          ]
-          period = 60
-          stat = "Average"
-          region = "eu-central-1"
-          title = "Database Connections"
-          view = "singleValue"
-          stacked = false
-        }
-      },
-
-      # Security Triggers Widget
-      {
-        type = "metric"
-        width = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["Narrekappe/Security-Triggers", "SecurityTriggerCount", { "stat": "Sum", "label": "Security Triggers" }]
-          ]
-          period = 60
-          stat = "Sum"
-          region = "eu-central-1"
-          title = "Security Triggers Activated"
-          view = "singleValue"
-        }
-      }
-    ]
-  })
+  tags = {
+    Name = "keycloak-ec2-sg"
+  }
 }
 
-# Outputs
-output "security_dashboard_url" {
-  value       = "https://eu-central-1.console.aws.amazon.com/cloudwatch/home?region=eu-central-1#dashboards:name=Narrekappe-Security"
-  description = "URL for the Security Monitoring Dashboard"
+
+resource "aws_security_group" "keycloak_public_sg" {
+  name        = "keycloak-public-sg"
+  description = "Allow public HTTP to Keycloak"
+  vpc_id      = aws_vpc.vpc_narre_main.id
+
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "keycloak-public-sg"
+  }
 }
 
-output "failed_login_alarm_name" {
-  value       = "narrekappe-console-failed-logins"  # Directe referentie
-  description = "Name of the CloudWatch alarm for failed logins"
+resource "aws_security_group" "web_sg" {
+  name        = "WebSG"
+  description = "Allow HTTP from loadbalancer"
+  vpc_id      = aws_vpc.vpc_narre_main.id
+
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.loadbalancer_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
-output "cloudtrail_s3_bucket_name" {
-  value       = "narrekappe-cloudtrail-logs"  # Directe referentie
-  description = "Name of the S3 bucket for CloudTrail logs"
+resource "aws_security_group" "database_sg" {
+  name        = "Database-SG"
+  description = "Allow connection on port 3306"
+  vpc_id      = aws_vpc.vpc_narre_main.id
+
+  ingress {
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    security_groups = [aws_security_group.web_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
-output "cloudwatch_log_group_name" {
-  value       = "CloudTrail/NarrekappeSecurity"  # Directe referentie
-  description = "Name of the CloudWatch Log Group for security events"
+resource "aws_security_group" "monitoring_sg" {
+  name        = "Monitoring-SG"
+  description = "Allow access from and to monitoring subnet to the network"
+  vpc_id      = aws_vpc.vpc_narre_main.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
 }
 
-output "security_monitoring_log_group_name" {
-  value       = aws_cloudwatch_log_group.security_monitoring_logs.name
-  description = "Name of the CloudWatch Log Group for security monitoring alerts"
+resource "aws_security_group" "management_sg" {
+  name        = "Management-SG"
+  description = "Allow access from management subnet"
+  vpc_id      = aws_vpc.vpc_narre_main.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
 }
 
-output "security_monitoring_log_group_arn" {
-  value       = aws_cloudwatch_log_group.security_monitoring_logs.arn
-  description = "ARN of the CloudWatch Log Group for security monitoring alerts"
+resource "aws_security_group" "nat_sg" {
+  name        = "nat-instance-sg"
+  description = "Allow outbound internet for private subnets"
+  vpc_id      = aws_vpc.vpc_narre_main.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "nat-instance-sg"
+  }
 }
+

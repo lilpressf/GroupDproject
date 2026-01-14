@@ -65,6 +65,18 @@ resource "aws_cloudwatch_log_group" "cloudtrail_security" {
   retention_in_days = 30
 }
 
+# CloudWatch Log Group voor Security Monitoring logs
+resource "aws_cloudwatch_log_group" "security_monitoring_logs" {
+  name              = "Narrekappe/Security-Monitoring"
+  retention_in_days = 90  # Langer bewaren vanwege compliance
+  
+  tags = {
+    Environment = "Test"
+    Component   = "Security"
+    LogType     = "Security-Events"
+  }
+}
+
 #IAM Role for CloudTrail to write to CloudWatch Logs
 resource "aws_iam_role" "cloudtrail_to_cloudwatch" {
   name = "CloudTrail-CloudWatchLogs-Role"
@@ -112,6 +124,19 @@ resource "aws_cloudwatch_log_metric_filter" "failed_console_logins" {
   }
 }
 
+# Metric Filter voor Security Triggers
+resource "aws_cloudwatch_log_metric_filter" "security_trigger" {
+  name           = "Security-Trigger-Activated"
+  pattern        = "{ $.timestamp = *, $.event = \"SECURITY_TRIGGER_ACTIVATED\", $.details = * }"
+  log_group_name = aws_cloudwatch_log_group.security_monitoring_logs.name
+
+  metric_transformation {
+    name      = "SecurityTriggerCount"
+    namespace = "Narrekappe/Security-Triggers"
+    value     = "1"
+  }
+}
+
 #CloudWatch Alarm for Failed Logins
 resource "aws_cloudwatch_metric_alarm" "failed_login_alarm" {
   alarm_name          = "narrekappe-console-failed-logins"
@@ -128,6 +153,26 @@ resource "aws_cloudwatch_metric_alarm" "failed_login_alarm" {
   tags = {
     Environment = "Test"
     Component   = "Security"
+  }
+}
+
+# CloudWatch Alarm voor Security Triggers
+resource "aws_cloudwatch_metric_alarm" "security_trigger_alarm" {
+  alarm_name          = "narrekappe-security-trigger"
+  alarm_description   = "Security trigger has been activated"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "1"
+  threshold           = "1"
+  period              = "60"
+  statistic           = "Sum"
+  metric_name         = "SecurityTriggerCount"
+  namespace           = "Narrekappe/Security-Triggers"
+  alarm_actions       = []
+  
+  tags = {
+    Environment = "Test"
+    Component   = "Security"
+    Priority    = "High"
   }
 }
 
@@ -169,6 +214,41 @@ resource "aws_cloudwatch_dashboard" "security_dashboard" {
           title  = "Security Activity - Failed Console Logins"
           view   = "timeSeries"
         }
+      },
+
+      # Database metrics - Connections (verplaatst van monitoring.tf)
+      {
+        type = "metric"
+        width = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.narre-db.identifier]
+          ]
+          period = 60
+          stat = "Average"
+          region = "eu-central-1"
+          title = "Database Connections"
+          view = "singleValue"
+          stacked = false
+        }
+      },
+
+      # Security Triggers Widget
+      {
+        type = "metric"
+        width = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["Narrekappe/Security-Triggers", "SecurityTriggerCount", { "stat": "Sum", "label": "Security Triggers" }]
+          ]
+          period = 60
+          stat = "Sum"
+          region = "eu-central-1"
+          title = "Security Triggers Activated"
+          view = "singleValue"
+        }
       }
     ]
   })
@@ -193,4 +273,14 @@ output "cloudtrail_s3_bucket_name" {
 output "cloudwatch_log_group_name" {
   value       = aws_cloudwatch_log_group.cloudtrail_security.name
   description = "Name of the CloudWatch Log Group for security events"
+}
+
+output "security_monitoring_log_group_name" {
+  value       = aws_cloudwatch_log_group.security_monitoring_logs.name
+  description = "Name of the CloudWatch Log Group for security monitoring alerts"
+}
+
+output "security_monitoring_log_group_arn" {
+  value       = aws_cloudwatch_log_group.security_monitoring_logs.arn
+  description = "ARN of the CloudWatch Log Group for security monitoring alerts"
 }
