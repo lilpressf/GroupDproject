@@ -37,8 +37,8 @@ jobs:
           echo "TF_VAR_keycloak_version=${{ secrets.KEYCLOAK_VERSION }}" >> $GITHUB_ENV
           echo "TF_VAR_keycloak_admin_username=${{ secrets.KEYCLOAK_ADMIN_USERNAME }}" >> $GITHUB_ENV
           echo "TF_VAR_keycloak_admin_password=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}" >> $GITHUB_ENV
-          TF_VAR_managed_ad_name: ${{ secrets.MANAGED_AD_NAME }}
-          TF_VAR_managed_ad_password: ${{ secrets.MANAGED_AD_PASSWORD }}
+          echo "TF_VAR_managed_ad_name=${{ secrets.MANAGED_AD_NAME }}" >> $GITHUB_ENV
+          echo "TF_VAR_managed_ad_password=${{ secrets.MANAGED_AD_PASSWORD }}" >> $GITHUB_ENV
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
