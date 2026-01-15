@@ -10,6 +10,7 @@ import "./style.css";
 
 const emptyForm = { name: "", email: "", department: "" };
 const defaultAuthUser = { email: "demo@local", name: "Dashboard User" };
+const LOCAL_OPS_KEY = "narrekappe-recent-ops";
 
 export default function App() {
   const [status, setStatus] = useState(null);
@@ -18,6 +19,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [recentOps, setRecentOps] = useState([]); // array of { id, severity, msg, ts }
 
   const selectedEmployee = useMemo(
     () => employees.find((e) => e.employeeId === selectedId) || null,
@@ -30,7 +32,7 @@ export default function App() {
       const res = await listEmployees();
       setEmployees(res.data || []);
     } catch (err) {
-      setStatus({ ok: false, msg: "Kon lijst niet laden." });
+      setStatus({ ok: false, msg: "Failed to load list." });
     } finally {
       setLoading(false);
     }
@@ -38,8 +40,33 @@ export default function App() {
 
   useEffect(() => {
     setApiAuthEmail(defaultAuthUser.email);
+    // restore recent ops from localStorage
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem(LOCAL_OPS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            setRecentOps(parsed);
+          }
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
+    }
     fetchEmployees();
   }, [fetchEmployees]);
+
+  // persist recent ops to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(LOCAL_OPS_KEY, JSON.stringify(recentOps));
+      } catch (e) {
+        // ignore storage errors (private mode, etc.)
+      }
+    }
+  }, [recentOps]);
 
   const isFormValid = () =>
     form.name.trim().length > 0 &&
@@ -49,7 +76,7 @@ export default function App() {
   const handleOnboard = async (e) => {
     if (e) e.preventDefault();
     if (!isFormValid()) {
-      setStatus({ ok: false, msg: "Vul naam, e-mail en afdeling in." });
+      setStatus({ ok: false, msg: "Please fill name, email, and department." });
       return;
     }
     setStatus(null);
@@ -58,13 +85,21 @@ export default function App() {
     try {
       if (selectedId) {
         await updateEmployee(selectedId, form);
-        setStatus({ ok: true, msg: "Medewerker bijgewerkt." });
+        setStatus({ ok: true, msg: "Employee updated." });
+        setRecentOps((prev) => [
+          { id: `op-${Date.now()}`, severity: "success", msg: `Updated ${form.name || selectedId}.`, ts: Date.now() },
+          ...prev,
+        ].slice(0, 3));
       } else {
         await createEmployee(form);
         setStatus({
           ok: true,
-          msg: "Medewerker aangemaakt. EC2 + IAM rol worden nu uitgerold.",
+          msg: "Employee created. EC2 + IAM role are being provisioned.",
         });
+        setRecentOps((prev) => [
+          { id: `op-${Date.now()}`, severity: "success", msg: `Onboarding started for ${form.name}.`, ts: Date.now() },
+          ...prev,
+        ].slice(0, 3));
       }
       setForm(emptyForm);
       setSelectedId(null);
@@ -72,8 +107,12 @@ export default function App() {
     } catch (err) {
       setStatus({
         ok: false,
-        msg: selectedId ? "Bijwerken mislukt." : "Er ging iets mis bij het aanmaken.",
+        msg: selectedId ? "Update failed." : "Something went wrong creating the employee.",
       });
+      setRecentOps((prev) => [
+        { id: `op-${Date.now()}`, severity: "danger", msg: selectedId ? "Update failed." : "Onboarding failed to start.", ts: Date.now() },
+        ...prev,
+      ].slice(0, 3));
     } finally {
       setSubmitting(false);
     }
@@ -98,16 +137,28 @@ export default function App() {
       if (res?.data?.status === "DELETING") {
         setStatus({
           ok: true,
-          msg: "Verwijderen gestart; resources worden opgeruimd. Dit kan een paar minuten duren.",
+          msg: "Delete started; resources are being cleaned up. This can take a few minutes.",
         });
+        setRecentOps((prev) => [
+          { id: `op-${Date.now()}`, severity: "warning", msg: "Offboarding in progress...", ts: Date.now() },
+          ...prev,
+        ].slice(0, 3));
       } else {
-        setStatus({ ok: true, msg: "Medewerker verwijderd." });
+        setStatus({ ok: true, msg: "Employee removed." });
+        setRecentOps((prev) => [
+          { id: `op-${Date.now()}`, severity: "success", msg: "Offboarding completed.", ts: Date.now() },
+          ...prev,
+        ].slice(0, 3));
       }
       setForm(emptyForm);
       setSelectedId(null);
       await fetchEmployees();
     } catch (err) {
-      setStatus({ ok: false, msg: "Verwijderen mislukt." });
+      setStatus({ ok: false, msg: "Delete failed." });
+      setRecentOps((prev) => [
+        { id: `op-${Date.now()}`, severity: "danger", msg: "Offboarding failed to start.", ts: Date.now() },
+        ...prev,
+      ].slice(0, 3));
     } finally {
       setSubmitting(false);
     }
@@ -119,6 +170,39 @@ export default function App() {
     setStatus(null);
   };
 
+  const alerts = useMemo(() => {
+    const a = [];
+    // derive from employee statuses
+    employees.forEach((emp) => {
+      if (emp.status === "FAILED") {
+        a.push({
+          id: `fail-${emp.employeeId}`,
+          title: "Onboarding/Offboarding failed",
+          detail: `${emp.name || emp.employeeId} (${emp.employeeId})`,
+          severity: "danger",
+        });
+      }
+      if (emp.status === "PROVISIONING" || emp.status === "DELETING") {
+        a.push({
+          id: `pending-${emp.employeeId}`,
+          title: "In progress",
+          detail: `${emp.name || emp.employeeId} is still ${emp.status?.toLowerCase()}`,
+          severity: "warning",
+        });
+      }
+    });
+    // recent ops history (max 3)
+    recentOps.forEach((op) => {
+      a.push({
+        id: op.id,
+        title: op.severity === "success" ? "Completed" : op.severity === "warning" ? "In progress" : "Failed",
+        detail: op.msg,
+        severity: op.severity,
+      });
+    });
+    return a;
+  }, [employees, recentOps]);
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100">
       <nav className="bg-gray-800 border-b border-gray-700 px-6 py-4">
@@ -126,7 +210,7 @@ export default function App() {
           <div>
             <h1 className="text-2xl font-bold">Training Platform Admin Dashboard</h1>
             <p className="text-gray-400 text-sm mt-1">
-              Onboard / Offboard Students  Deploy Vulnerable Machines  System Overview
+              Onboard / Offboard Students System Overview
             </p>
           </div>
           <div className="text-sm text-gray-300">{defaultAuthUser.name}</div>
@@ -170,11 +254,11 @@ export default function App() {
           <div className="grid md:grid-cols-2 gap-6 mt-6">
             <form onSubmit={handleOnboard} className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Naam</label>
+                <label className="block text-sm text-gray-300 mb-1">Name</label>
                 <input
                   type="text"
                   className="w-full rounded bg-gray-900 border border-gray-700 px-3 py-2 text-gray-100"
-                  placeholder="Bijv. Alex Janssen"
+                  placeholder="e.g. Alex Janssen"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
@@ -182,11 +266,11 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-300 mb-1">E-mail</label>
+                <label className="block text-sm text-gray-300 mb-1">Email</label>
                 <input
                   type="email"
                   className="w-full rounded bg-gray-900 border border-gray-700 px-3 py-2 text-gray-100"
-                  placeholder="gebruiker@bedrijf.nl"
+                  placeholder="user@example.com"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required
@@ -194,11 +278,11 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Afdeling</label>
+                <label className="block text-sm text-gray-300 mb-1">Department</label>
                 <input
                   type="text"
                   className="w-full rounded bg-gray-900 border border-gray-700 px-3 py-2 text-gray-100"
-                  placeholder="Bijv. Security, Dev, Ops"
+                  placeholder="e.g. Security, Dev, Ops"
                   value={form.department}
                   onChange={(e) => setForm({ ...form, department: e.target.value })}
                   required
@@ -206,13 +290,13 @@ export default function App() {
               </div>
 
               <div className="flex gap-3 text-sm text-gray-400">
-                <span>Tip: vul de gegevens in en gebruik hierboven Onboard/Offboard.</span>
+                <span>Tip: fill the fields and use Onboard/Offboard above.</span>
                 <button
                   type="button"
                   className="text-blue-400 hover:text-blue-300 underline"
                   onClick={onNewClick}
                 >
-                  Velden leegmaken
+                  Clear fields
                 </button>
               </div>
             </form>
@@ -220,13 +304,13 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <i className="fa-solid fa-list text-yellow-400"></i>
-                <h3 className="text-lg font-semibold">Huidige medewerkers</h3>
+                <h3 className="text-lg font-semibold">Current employees</h3>
               </div>
 
               <div className="space-y-2">
-                {loading && <div className="text-gray-400">Laden...</div>}
+                {loading && <div className="text-gray-400">Loading...</div>}
                 {!loading && employees.length === 0 && (
-                  <div className="text-gray-400">Nog geen medewerkers.</div>
+                  <div className="text-gray-400">No employees yet.</div>
                 )}
                 {!loading &&
                   employees.map((emp) => (
@@ -243,7 +327,7 @@ export default function App() {
                         <p className="font-medium text-gray-100">
                           {emp.name}
                           {emp.status === "DELETING" && (
-                            <span className="text-gray-400 ml-2">Opkuisen...</span>
+                            <span className="text-gray-400 ml-2">Cleaning up...</span>
                           )}
                         </p>
                         <p className="text-sm text-gray-400">
@@ -265,15 +349,36 @@ export default function App() {
             <i className="fa-solid fa-bell text-red-400 text-lg"></i>
             <div>
               <h2 className="text-xl font-semibold">Alerts & Notifications</h2>
-              <p className="text-gray-400 text-sm">System operating status.</p>
+              <p className="text-gray-400 text-sm">Quick health signals and manual checks.</p>
             </div>
           </div>
 
-          <div className="mt-4 bg-gray-700 p-4 rounded-lg text-gray-300">
-            <strong>No active alerts.</strong>
-            <p className="text-sm text-gray-400 mt-1">
-              System operating normally.
-            </p>
+          <div className="mt-4 space-y-3">
+            {alerts.length === 0 && (
+              <div className="bg-gray-700 p-4 rounded-lg text-gray-300">
+                <strong>No active alerts.</strong>
+                <p className="text-sm text-gray-400 mt-1">System operating normally.</p>
+              </div>
+            )}
+            {alerts.map((a) => (
+              <div
+                key={a.id}
+                className={`p-4 rounded-lg border ${
+                  a.severity === "success"
+                    ? "border-green-500/60 bg-green-900/20"
+                    : a.severity === "warning"
+                    ? "border-yellow-500/60 bg-yellow-900/20"
+                    : "border-red-500/60 bg-red-900/20"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold">{a.title}</div>
+                    <div className="text-sm text-gray-200">{a.detail}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       </main>
