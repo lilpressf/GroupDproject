@@ -1,7 +1,7 @@
 # Database subnet groep
 resource "aws_db_subnet_group" "db_subnet_group" {
   name       = "narre-db-subnet-group"
-  subnet_ids = [aws_subnet.sub_database_2.id, aws_subnet.sub_private_1.id]
+  subnet_ids = [aws_subnet.sub_database_2.id, aws_subnet.sub_database_2.id]
 
   tags = {
     Name = "narre-db-subnet-group"
@@ -30,32 +30,34 @@ resource "aws_db_parameter_group" "db_params" {
 
 # RDS MySQL database
 resource "aws_db_instance" "narre-db" {
-  identifier           = "narre-db"
-  engine               = "mysql"
-  engine_version       = "8.0"
-  instance_class       = "db.t3.micro"
-  allocated_storage    = 20
-  storage_type         = "gp2"
-  
-  db_name              = "narre_db"
-  username             = var.db_username
-  password             = var.db_password
-  
+  identifier        = "narre-db"
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
+  storage_type      = "gp2"
+
+  db_name  = "narre_db"
+  username = var.db_username
+  password = var.db_password
+
   db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.database_sg.id]
-  
-  publicly_accessible    = true
-#   publicly_accessible    = false
-  skip_final_snapshot    = true
-  deletion_protection    = false
+
+  multi_az = true
+
+  publicly_accessible = true  # see fix #3 below
+  skip_final_snapshot = true
+  deletion_protection = false
 
   enabled_cloudwatch_logs_exports = ["general", "slowquery"]
-  parameter_group_name = aws_db_parameter_group.db_params.name
-  
+  parameter_group_name            = aws_db_parameter_group.db_params.name
+
   tags = {
     Name = "narre-db"
   }
 }
+
 
 # Optioneel: Outputs voor gebruik elders
 output "db_endpoint" {
