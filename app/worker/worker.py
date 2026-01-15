@@ -64,6 +64,8 @@ def create_onboarding_job(message: dict):
         client.V1EnvVar(name="DEPARTMENT", value=message.get("department", "")),
         client.V1EnvVar(name="AWS_REGION", value=AWS_REGION),
         client.V1EnvVar(name="EMPLOYEE_TABLE_NAME", value=EMPLOYEE_TABLE_NAME),
+        client.V1EnvVar(name="EMPLOYEE_PASSWORD_TABLE_NAME", value=os.getenv("EMPLOYEE_PASSWORD_TABLE_NAME", "")),
+        client.V1EnvVar(name="DB_ENGINE", value=os.getenv("DB_ENGINE", "dynamodb")),
         client.V1EnvVar(name="EC2_INSTANCE_TYPE", value=EC2_INSTANCE_TYPE),
         client.V1EnvVar(name="AMI_SSM_PARAMETER", value=AMI_SSM_PARAMETER),
         client.V1EnvVar(name="INSTANCE_PROFILE_PREFIX", value=INSTANCE_PROFILE_PREFIX),
@@ -72,6 +74,7 @@ def create_onboarding_job(message: dict):
         client.V1EnvVar(name="WORKSPACES_DIRECTORY_ID", value=os.getenv("WORKSPACES_DIRECTORY_ID", "")),
         client.V1EnvVar(name="WORKSPACES_BUNDLE_ID", value=os.getenv("WORKSPACES_BUNDLE_ID", "")),
         client.V1EnvVar(name="WORKSPACES_SUBNET_IDS", value=os.getenv("WORKSPACES_SUBNET_IDS", "")),
+        client.V1EnvVar(name="S3_BUCKET", value=os.getenv("S3_BUCKET", "")),
         client.V1EnvVar(name="AD_LDAP_URL", value=os.getenv("AD_LDAP_URL", "")),
         client.V1EnvVar(name="AD_BIND_DN", value=os.getenv("AD_BIND_DN", "")),
         client.V1EnvVar(name="AD_BIND_PASSWORD", value=os.getenv("AD_BIND_PASSWORD", "")),
@@ -85,6 +88,15 @@ def create_onboarding_job(message: dict):
         client.V1EnvVar(name="MANAGEMENT_INSTANCE_ID", value=os.getenv("MANAGEMENT_INSTANCE_ID", "")),
         client.V1EnvVar(name="AD_DEFAULT_PASSWORD", value=os.getenv("AD_DEFAULT_PASSWORD", "")),
     ]
+
+    if message.get("studentId"):
+        env_vars.append(client.V1EnvVar(name="STUDENT_ID", value=str(message.get("studentId"))))
+    if message.get("firstName"):
+        env_vars.append(client.V1EnvVar(name="FIRST_NAME", value=str(message.get("firstName"))))
+    if message.get("lastName"):
+        env_vars.append(client.V1EnvVar(name="LAST_NAME", value=str(message.get("lastName"))))
+    if message.get("displayName"):
+        env_vars.append(client.V1EnvVar(name="DISPLAY_NAME", value=str(message.get("displayName"))))
 
     ws_id = message.get("workspaceId")
     if ws_id:

@@ -1,6 +1,12 @@
 # === EC2 provisioning met domain join, AD-user, groep, en SNS met RDP-bestand ===
-def create_ec2_for_employee(employee_id: str, email: str, department: str) -> dict:
-    user_name = email.split("@")[0] if email else f"user-{employee_id}"
+def create_ec2_for_employee(
+    employee_id: str,
+    email: str,
+    department: str,
+    username: str | None = None,
+    display_name: str | None = None,
+) -> dict:
+    user_name = username or (email.split("@")[0] if email else f"user-{employee_id}")
     password = generate_password()
     store_employee_password(employee_id, email, password)
     dept = (department or "").lower()
@@ -139,19 +145,19 @@ def create_ec2_for_employee(employee_id: str, email: str, department: str) -> di
 
     # AD user aanmaken en aan groep toevoegen via management instance
     ad_ps = f'''
-# Zorg dat RSAT AD tools aanwezig zijn en forceer een expliciete AD server
-try {{
-    Add-WindowsCapability -Online -Name "Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0" -ErrorAction Stop | Out-Null
-}} catch {{
-    Install-WindowsFeature RSAT-AD-PowerShell -IncludeAllSubFeature -IncludeManagementTools | Out-Null
-}}
-Import-Module ActiveDirectory -ErrorAction Stop
-$Server      = "{AD_LDAP_URL}"; if (-not $Server) {{ $Server = "{AD_USER_DOMAIN}" }}
-$Username    = "{user_name}"
-$DisplayName = "Employee {employee_id} ({user_name})"
-$Password    = "{password}"
-$OuPath      = "{AD_USER_OU}"
-$AdminUser   = "{AD_ADMIN_UPN}"
+    # Zorg dat RSAT AD tools aanwezig zijn en forceer een expliciete AD server
+    try {{
+        Add-WindowsCapability -Online -Name "Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0" -ErrorAction Stop | Out-Null
+    }} catch {{
+        Install-WindowsFeature RSAT-AD-PowerShell -IncludeAllSubFeature -IncludeManagementTools | Out-Null
+    }}
+    Import-Module ActiveDirectory -ErrorAction Stop
+    $Server      = "{AD_LDAP_URL}"; if (-not $Server) {{ $Server = "{AD_USER_DOMAIN}" }}
+    $Username    = "{user_name}"
+    $DisplayName = "{(display_name or f"Employee {employee_id} ({user_name})").replace('"','`"')}"
+    $Password    = "{password}"
+    $OuPath      = "{AD_USER_OU}"
+    $AdminUser   = "{AD_ADMIN_UPN}"
 $AdminPass   = "{AD_ADMIN_PASSWORD}"
 $secAdminPwd = ConvertTo-SecureString $AdminPass -AsPlainText -Force
 $cred        = New-Object System.Management.Automation.PSCredential($AdminUser, $secAdminPwd)
@@ -249,38 +255,22 @@ net localgroup Administrators $target
     else:
         s3_upload_error = "S3_BUCKET environment variable not set"
 
-    # SNS notificatie met downloadlink indien beschikbaar, anders foutmelding
-    subject = f"Nieuwe EC2 voor medewerker: {user_name}"
-    if rdp_url:
-        rdp_info = f"RDP-bestand: {rdp_url}\n"
-    else:
-        rdp_info = f"RDP-bestand kon niet worden geüpload: {s3_upload_error or rdp_file}\n"
+        # SNS notificatie met downloadlink indien beschikbaar
+    if SNS_TOPIC_ARN:
+        subject = f"Nieuwe EC2 voor medewerker: {user_name}"
+        rdp_info = f"RDP-bestand: {rdp_url}\n" if rdp_url else f"RDP-bestand kon niet worden geupload: {s3_upload_error or rdp_file}\n"
+        message = (
+            f"Nieuwe EC2 instance is aangemaakt voor {user_name}\n"
+            f"InstanceId: {instance_id}\n"
+            f"{rdp_info}"
+            f"Gebruikersnaam: {user_name}\n"
+            f"Wachtwoord: {password}\n"
+            f"Domein: {AD_USER_DOMAIN}\n"
+        )
+        sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=message)
+        print(f"[EC2] SNS notification sent for {user_name}")
 
-    message = (
-        f"Nieuwe EC2 instance is aangemaakt voor {user_name}\n"
-        f"InstanceId: {instance_id}\n"
-        f"{rdp_info}"
-        f"Gebruikersnaam: {user_name}\n"
-        f"Wachtwoord: {password}\n"
-        f"Domein: {AD_USER_DOMAIN}\n"
-    )
-    sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=message)
-    print(f"[EC2] SNS notification sent for {user_name}")
-
-    # SNS notificatie met downloadlink indien beschikbaar
-    subject = f"Nieuwe EC2 voor medewerker: {user_name}"
-    message = (
-        f"Nieuwe EC2 instance is aangemaakt voor {user_name}\n"
-        f"InstanceId: {instance_id}\n"
-        f"RDP-bestand: {rdp_url or rdp_file}\n"
-        f"Gebruikersnaam: {user_name}\n"
-        f"Wachtwoord: {password}\n"
-        f"Domein: {AD_USER_DOMAIN}\n"
-    )
-    sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=message)
-    print(f"[EC2] SNS notification sent for {user_name}")
-
-    return {
+return {
         "status": "ok",
         "employee_id": employee_id,
         "instance_id": instance_id,
@@ -293,11 +283,15 @@ net localgroup Administrators $target
     }
 import json
 import os
+import re
 import time
 from typing import Dict, Tuple
 
 import boto3
 from botocore.exceptions import ClientError
+
+# Database backend selection (dynamodb or rds)
+DB_ENGINE = os.getenv("DB_ENGINE", "dynamodb")
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-central-1")
 AWS_ACCOUNT_ID = os.getenv("AWS_ACCOUNT_ID") or boto3.client("sts").get_caller_identity()["Account"]
@@ -314,7 +308,9 @@ INSTANCE_PROFILE_PREFIX = os.getenv("INSTANCE_PROFILE_PREFIX", "employee-profile
 MANAGED_POLICY_ARN = os.getenv(
     "IAM_MANAGED_POLICY_ARN", "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 )
-SNS_TOPIC_ARN = os.getenv("SNS_TOPIC_ARN")
+# SNS / S3
+SNS_TOPIC_ARN = os.getenv("SNS_TOPIC_ARN") or ""
+S3_BUCKET = os.getenv("S3_BUCKET", "")  # leave empty to skip RDP upload
 WS_DIRECTORY_ID = os.getenv("WORKSPACES_DIRECTORY_ID")
 WS_BUNDLE_ID = os.getenv("WORKSPACES_BUNDLE_ID")
 WS_SUBNET_IDS = os.getenv("WORKSPACES_SUBNET_IDS", "")
@@ -338,14 +334,43 @@ if not AD_DOMAIN_NETBIOS and AD_USER_DOMAIN:
 # Standaard wachtwoord voor nieuwe accounts; kan worden overschreven via env
 DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD") or AD_DEFAULT_PASSWORD or "Welkom99!!"
 
-import psycopg2
+
+def _build_ad_username(student_id: str | None, email: str | None, employee_id: str) -> str:
+    """
+    Bouw een AD SAM-accountnaam (<=20 chars) met voorkeur voor studentId, daarna email prefix, daarna employeeId.
+    """
+    if student_id:
+        candidate = student_id
+    elif email and "@" in email:
+        candidate = email.split("@")[0]
+    else:
+        candidate = employee_id
+    candidate = re.sub(r"[^A-Za-z0-9._-]", "", candidate or "")
+    candidate = candidate[:20]
+    if not candidate:
+        raise ValueError("Kan geen geldige AD gebruikersnaam afleiden (studentId/email/employeeId ontbreekt)")
+    return candidate.lower()
+
+
+def _build_display_name(first_name: str | None, last_name: str | None, fallback: str | None, username: str) -> str:
+    parts = [p for p in [first_name, last_name] if p]
+    if parts:
+        return " ".join(parts)
+    if fallback:
+        return fallback
+    return username
+
+
+# PostgreSQL driver is only needed when DB_ENGINE == "rds"; lazy import avoids crashes when using DynamoDB-only mode
+psycopg2 = None
+if DB_ENGINE == "rds":
+    import psycopg2
 
 dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
 table = dynamodb.Table(TABLE_NAME)
 password_table = dynamodb.Table(PASSWORD_TABLE_NAME) if PASSWORD_TABLE_NAME else None
 
 # RDS settings
-DB_ENGINE = os.getenv("DB_ENGINE", "dynamodb")
 DB_HOST = os.getenv("DB_HOST", "")
 DB_PORT = int(os.getenv("DB_PORT", "5432") or 5432)
 DB_NAME = os.getenv("DB_NAME", "cs3_db")
@@ -922,14 +947,15 @@ def main():
                 resp = table.get_item(Key={"employeeId": employee_id})
                 item = resp.get("Item", {})
 
+            student_id = os.getenv("STUDENT_ID") or item.get("studentId") or employee_id
             username = os.getenv("EMAIL") or item.get("email", "")
             ws_id = item.get("workspaceId") or os.getenv("WORKSPACE_ID")
             department = os.getenv("DEPARTMENT") or item.get("department")
 
             # delete AD user via SSM if configured and we have username
-            if username and MANAGEMENT_INSTANCE_ID:
+            if MANAGEMENT_INSTANCE_ID:
                 try:
-                    user = username.split("@")[0]
+                    user = _build_ad_username(student_id, username, employee_id)
                     delete_ad_user_via_ssm(user)
                 except Exception as exc:
                     errors.append(f"AD deletion failed: {exc}")
@@ -1077,7 +1103,11 @@ def main():
             },
         )
         # AD user provisioning via SSM + random password
-        username = email.split("@")[0] if email else None
+        student_id = os.getenv("STUDENT_ID") or employee_id
+        first_name = os.getenv("FIRST_NAME") or (name.split(" ")[0] if name else None)
+        last_name = os.getenv("LAST_NAME")
+        username = _build_ad_username(student_id, email, employee_id) if (student_id or email) else None
+        display_name = _build_display_name(first_name, last_name, name, username or employee_id)
         user_password = generate_password()
         if username and MANAGEMENT_INSTANCE_ID:
             try:
@@ -1085,7 +1115,7 @@ def main():
                     username=username,
                     password=user_password,
                     email=email,
-                    name=name,
+                    name=display_name,
                     department=department,
                 )
                 # wacht kort zodat AD replicatie klaar is
@@ -1093,7 +1123,13 @@ def main():
             except Exception as ssm_exc:
                 print(f"[JOB] AD password via SSM failed (continuing): {ssm_exc}")
         # EC2 provisioning in plaats van WorkSpaces
-        ec2_result = create_ec2_for_employee(employee_id, email, department)
+        ec2_result = create_ec2_for_employee(
+            employee_id,
+            email,
+            department,
+            username=username,
+            display_name=display_name,
+        )
         if ec2_result:
             update_dynamodb_status(
                 employee_id,
