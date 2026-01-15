@@ -397,3 +397,40 @@ output "cluster_name" {
 output "cluster_ca" {
   value = aws_eks_cluster.this.certificate_authority[0].data
 }
+
+output "node_group_name" {
+  value = aws_eks_node_group.default.node_group_name
+}
+
+output "aws_account_id" {
+  value = data.aws_caller_identity.current.account_id
+}
+
+output "vpc_id" {
+  value = data.aws_vpc.main.id
+}
+
+output "worker_subnet_id" {
+  value = data.aws_subnet.public_a.id
+}
+
+output "worker_security_group_id" {
+  value = aws_security_group.eks_nodes.id
+}
+
+# Placeholders for compatibility with existing manifests/workflow steps.
+output "backend_irsa_role_arn" {
+  value = ""
+}
+
+output "job_worker_irsa_role_arn" {
+  value = ""
+}
+
+output "job_controller_irsa_role_arn" {
+  value = ""
+}
+
+output "alb_controller_role_arn" {
+  value = ""
+}
