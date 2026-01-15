@@ -233,8 +233,7 @@ net localgroup Administrators $target
         f.write(rdp_content)
 
 
-    # Upload RDP-bestand naar S3 en genereer downloadlink
-    S3_BUCKET = os.getenv("S3_BUCKET", "cs1-terraform-state-anouar")
+    # Upload RDP-bestand naar S3 (optioneel)
     rdp_url = None
     s3_upload_error = None
     if S3_BUCKET:
@@ -242,7 +241,6 @@ net localgroup Administrators $target
             s3 = boto3.client("s3")
             s3_key = f"rdp/{user_name}-{instance_id}.rdp"
             s3.upload_file(rdp_file, S3_BUCKET, s3_key)
-            # Genereer een pre-signed URL voor download (24 uur geldig)
             rdp_url = s3.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": S3_BUCKET, "Key": s3_key},
@@ -255,7 +253,7 @@ net localgroup Administrators $target
     else:
         s3_upload_error = "S3_BUCKET environment variable not set"
 
-        # SNS notificatie met downloadlink indien beschikbaar
+    # SNS notificatie met downloadlink indien beschikbaar
     if SNS_TOPIC_ARN:
         subject = f"Nieuwe EC2 voor medewerker: {user_name}"
         rdp_info = f"RDP-bestand: {rdp_url}\n" if rdp_url else f"RDP-bestand kon niet worden geupload: {s3_upload_error or rdp_file}\n"
@@ -270,7 +268,7 @@ net localgroup Administrators $target
         sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=message)
         print(f"[EC2] SNS notification sent for {user_name}")
 
-return {
+    return {
         "status": "ok",
         "employee_id": employee_id,
         "instance_id": instance_id,
@@ -1143,17 +1141,20 @@ def main():
                 },
             )
         # Stuur SNS met EC2/RDP info
-        subject = f"Nieuwe EC2 voor medewerker: {ec2_result.get('user_name')}"
-        message = (
-            f"Nieuwe EC2 instance is aangemaakt voor {ec2_result.get('user_name')}\n"
-            f"InstanceId: {ec2_result.get('instance_id')}\n"
-            f"RDP-bestand: {ec2_result.get('rdp_file')}\n"
-            f"Gebruikersnaam: {ec2_result.get('user_name')}\n"
-            f"Wachtwoord: {ec2_result.get('password')}\n"
-            f"Domein: {AD_USER_DOMAIN}\n"
-        )
-        sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=message)
-        print(f"[JOB] Onboarding complete for {employee_id}")
+        if SNS_TOPIC_ARN:
+            subject = f"Nieuwe EC2 voor medewerker: {ec2_result.get('user_name')}"
+            message = (
+                f"Nieuwe EC2 instance is aangemaakt voor {ec2_result.get('user_name')}\n"
+                f"InstanceId: {ec2_result.get('instance_id')}\n"
+                f"RDP-bestand: {ec2_result.get('rdp_file')}\n"
+                f"Gebruikersnaam: {ec2_result.get('user_name')}\n"
+                f"Wachtwoord: {ec2_result.get('password')}\n"
+                f"Domein: {AD_USER_DOMAIN}\n"
+            )
+            sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=message)
+            print(f"[JOB] Onboarding complete for {employee_id}")
+        else:
+            print(f"[JOB] Onboarding complete for {employee_id} (SNS skipped)")
     except Exception as exc:
         print(f"[JOB] Failed onboarding for {employee_id}: {exc}")
         update_dynamodb_status(

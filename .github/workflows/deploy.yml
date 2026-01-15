@@ -65,5 +65,78 @@ jobs:
           aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "${{ secrets.AWS_REGION }}"
         working-directory: ./terraform
 
+      - name: Export Terraform outputs
+        run: |
+          echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> $GITHUB_ENV
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=$(terraform output -raw aws_account_id)" >> $GITHUB_ENV
+          echo "SQS_QUEUE_URL=$(terraform output -raw sqs_queue_url)" >> $GITHUB_ENV
+          echo "SNS_TOPIC_ARN=$(terraform output -raw sns_topic_arn)" >> $GITHUB_ENV
+          echo "S3_BUCKET=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+          echo "DDB_EMPLOYEE_TABLE=$(terraform output -raw dynamodb_employees_table)" >> $GITHUB_ENV
+          echo "DDB_PASSWORD_TABLE=$(terraform output -raw dynamodb_passwords_table)" >> $GITHUB_ENV
+          echo "DB_HOST=$(terraform output -raw db_endpoint)" >> $GITHUB_ENV
+          echo "DB_PORT=$(terraform output -raw db_port)" >> $GITHUB_ENV
+          echo "DB_NAME=$(terraform output -raw db_name)" >> $GITHUB_ENV
+          echo "DB_USER=$(terraform output -raw db_username)" >> $GITHUB_ENV
+          echo "EC2_SUBNET_ID=$(terraform output -raw worker_subnet_id)" >> $GITHUB_ENV
+          echo "EC2_SECURITY_GROUP_ID=$(terraform output -raw worker_security_group_id)" >> $GITHUB_ENV
+          echo "BACKEND_IRSA_ROLE_ARN=$(terraform output -raw backend_irsa_role_arn)" >> $GITHUB_ENV
+          echo "JOB_WORKER_IRSA_ROLE_ARN=$(terraform output -raw job_worker_irsa_role_arn)" >> $GITHUB_ENV
+          echo "JOB_CONTROLLER_IRSA_ROLE_ARN=$(terraform output -raw job_controller_irsa_role_arn)" >> $GITHUB_ENV
+          echo "ALB_CONTROLLER_ROLE_ARN=$(terraform output -raw alb_controller_role_arn)" >> $GITHUB_ENV
+          echo "VPC_ID=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
+          echo "WORKSPACES_DIRECTORY_ID=${{ secrets.WORKSPACES_DIRECTORY_ID }}" >> $GITHUB_ENV
+          echo "WORKSPACES_BUNDLE_ID=${{ secrets.WORKSPACES_BUNDLE_ID }}" >> $GITHUB_ENV
+          echo "WORKSPACES_SUBNET_IDS=${{ secrets.WORKSPACES_SUBNET_IDS }}" >> $GITHUB_ENV
+          echo "DIRECTORY_ID=${{ secrets.DIRECTORY_ID }}" >> $GITHUB_ENV
+          echo "AD_ADMIN_UPN=${{ secrets.AD_ADMIN_UPN }}" >> $GITHUB_ENV
+          echo "AD_ADMIN_PASSWORD=${{ secrets.AD_ADMIN_PASSWORD }}" >> $GITHUB_ENV
+          echo "AD_USER_OU=${{ secrets.AD_USER_OU }}" >> $GITHUB_ENV
+          echo "AD_USER_DOMAIN=${{ secrets.AD_USER_DOMAIN }}" >> $GITHUB_ENV
+          echo "AD_DEFAULT_PASSWORD=${{ secrets.AD_DEFAULT_PASSWORD }}" >> $GITHUB_ENV
+          echo "AD_DOMAIN_NETBIOS=${{ secrets.AD_DOMAIN_NETBIOS }}" >> $GITHUB_ENV
+          echo "MANAGEMENT_INSTANCE_ID=${{ secrets.MANAGEMENT_INSTANCE_ID }}" >> $GITHUB_ENV
+        working-directory: ./terraform
+
+      - name: Install envsubst
+        run: sudo apt-get update && sudo apt-get install -y gettext
+
+      - name: Apply Kubernetes service accounts and config
+        run: |
+          envsubst < k8s/aws-load-balancer-controller-sa.yaml | kubectl apply -f -
+          envsubst < k8s/serviceaccount-backend.yaml | kubectl apply -f -
+          envsubst < k8s/serviceaccount-worker.yaml | kubectl apply -f -
+          envsubst < k8s/job-controller-serviceaccount.yaml | kubectl apply -f -
+          envsubst < k8s/worker-configmap.yaml | kubectl apply -f -
+          envsubst < k8s/db-credentials.yaml | kubectl apply -f -
+          kubectl apply -f k8s/backend-secret.yaml
+          envsubst < k8s/ad-bind-credentials.yaml | kubectl apply -f -
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install AWS Load Balancer Controller
+        run: |
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            -n kube-system \
+            --set clusterName="$CLUSTER_NAME" \
+            --set serviceAccount.create=false \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set region="${{ secrets.AWS_REGION }}" \
+            --set vpcId="$VPC_ID"
+        working-directory: ./terraform
+
       - name: Deploy Kubernetes manifests
-        run: kubectl apply -f k8s
+        run: |
+          kubectl apply -f k8s/rbac.yaml
+          kubectl apply -f k8s/job-controller-rbac.yaml
+          kubectl apply -f k8s/backend-service.yaml
+          kubectl apply -f k8s/frontend-service.yaml
+          envsubst < k8s/backend-deployment.yaml | kubectl apply -f -
+          envsubst < k8s/frontend-deployment.yaml | kubectl apply -f -
+          envsubst < k8s/job-controller-deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/ingress.yaml

@@ -1,0 +1,40 @@
+{
+    "Statement":  [
+                      {
+                          "Action":  [
+                                         "dynamodb:GetItem",
+                                         "dynamodb:PutItem",
+                                         "dynamodb:UpdateItem",
+                                         "dynamodb:DeleteItem",
+                                         "dynamodb:Scan",
+                                         "dynamodb:Query",
+                                         "dynamodb:DescribeTable"
+                                     ],
+                          "Effect":  "Allow",
+                          "Resource":  [
+                                           "arn:aws:dynamodb:eu-central-1:410859982724:table/narrekappe-employees",
+                                           "arn:aws:dynamodb:eu-central-1:410859982724:table/narrekappe-employee-passwords",
+                                           "arn:aws:dynamodb:eu-central-1:410859982724:table/cs3-nca-employee-passwords"
+                                       ]
+                      },
+                      {
+                          "Action":  [
+                                         "sqs:SendMessage",
+                                         "sqs:ReceiveMessage",
+                                         "sqs:DeleteMessage",
+                                         "sqs:GetQueueAttributes",
+                                         "sqs:GetQueueUrl"
+                                     ],
+                          "Effect":  "Allow",
+                          "Resource":  "arn:aws:sqs:eu-central-1:410859982724:narrekappe-onboarding-queue"
+                      },
+                      {
+                          "Action":  [
+                                         "events:PutEvents"
+                                     ],
+                          "Effect":  "Allow",
+                          "Resource":  "*"
+                      }
+                  ],
+    "Version":  "2012-10-17"
+}

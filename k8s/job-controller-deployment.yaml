@@ -24,13 +24,13 @@ spec:
                 name: ad-bind-credentials
           env:
             - name: AWS_REGION
+              value: "eu-central-1"
+
+            - name: SQS_QUEUE_URL
               valueFrom:
                 configMapKeyRef:
                   name: worker-config
-                  key: AWS_REGION
-
-            - name: SQS_QUEUE_URL
-              value: "https://sqs.eu-central-1.amazonaws.com/410859982724/cs3-nca-onboarding-queue"
+                  key: SQS_QUEUE_URL
 
             - name: JOB_WORKER_IMAGE
               value: "410859982724.dkr.ecr.eu-central-1.amazonaws.com/cs3-job-worker:latest"
@@ -191,7 +191,10 @@ spec:
                   key: DB_USER
 
             - name: DB_PASSWORD
-              value: "P0stgres-Rds-410!" # TODO: move to K8s Secret for production
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DB_PASSWORD
 
           resources:
             limits:

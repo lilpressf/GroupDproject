@@ -3,5 +3,3 @@ kind: ServiceAccount
 metadata:
   name: aws-load-balancer-controller
   namespace: kube-system
-  annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::410859982724:role/AmazonEKSLoadBalancerControllerRole

@@ -9,7 +9,6 @@ app/frontend/node_modules/
 app/frontend/dist/
 
 # Local/derived Terraform artifacts and temp files
-infra410/
 tmp.json
 patch-ingress.json
 backend-policy.json

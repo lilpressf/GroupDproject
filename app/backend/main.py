@@ -43,9 +43,13 @@ eventbridge = boto3.client("events", region_name=AWS_REGION)
 
 
 class EmployeeCreateRequest(BaseModel):
-    name: str
+    name: str | None = None
     email: EmailStr
     department: str
+    studentId: str | None = None
+    firstName: str | None = None
+    lastName: str | None = None
+    displayName: str | None = None
 
 
 @api.get("/health")
@@ -70,14 +74,33 @@ def login(payload: LoginRequest):
 
 @api.post("/employees")
 def create_employee_endpoint(payload: EmployeeCreateRequest):
-    employee_id = db.create_employee(payload.dict())
+    # Bepaal een display naam (payload.name > displayName > first+last > email prefix)
+    fallback_name = payload.displayName
+    if not fallback_name:
+        parts = [payload.firstName, payload.lastName]
+        parts = [p for p in parts if p]
+        if parts:
+            fallback_name = " ".join(parts)
+    name_value = payload.name or fallback_name or payload.email.split("@")[0]
+
+    employee_id = db.create_employee(
+        {
+            "name": name_value,
+            "email": payload.email,
+            "department": payload.department,
+        }
+    )
 
     # stuur event naar EventBridge
     detail = {
         "employeeId": employee_id,
         "email": payload.email,
-        "name": payload.name,
+        "name": name_value,
         "department": payload.department,
+        "studentId": payload.studentId,
+        "firstName": payload.firstName,
+        "lastName": payload.lastName,
+        "displayName": payload.displayName or name_value,
     }
 
     eventbridge.put_events(
@@ -128,8 +151,20 @@ def delete_employee_endpoint(employee_id: str):
     item = db.get_employee(employee_id)
     if not item:
         raise HTTPException(status_code=404, detail="Employee not found")
-    # direct delete for now (skip async worker cleanup)
-    db.delete_employee(employee_id)
+    # enqueue delete for worker cleanup
+    try:
+        detail = {
+            "employeeId": employee_id,
+            "action": "delete",
+            "email": item.get("email", ""),
+            "department": item.get("department", ""),
+            "workspaceId": item.get("workspaceId", ""),
+        }
+        sqs.send_message(QueueUrl=SQS_QUEUE_URL, MessageBody=json.dumps({"detail": detail}))
+    except Exception as exc:
+        # fall back to direct delete if queue fails
+        db.delete_employee(employee_id)
+        raise HTTPException(status_code=500, detail=f"Failed to queue delete, removed DB only: {exc}")
     logger.info(f"[DELETE] Employee {employee_id} deleted")
     return {"deleted": True, "employeeId": employee_id, "status": "DELETED"}
 
