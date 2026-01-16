@@ -11,6 +11,8 @@ import "./style.css";
 const emptyForm = { name: "", email: "", department: "" };
 const defaultAuthUser = { email: "demo@local", name: "Dashboard User" };
 const LOCAL_OPS_KEY = "narrekappe-recent-ops";
+const AUTH_TOKEN_KEY = "narrekappe-admin-auth";
+const DEMO_ADMIN_USER = { email: "admin@narrekappe.com", password: "LetMeIn123!" };
 
 export default function App() {
   const [status, setStatus] = useState(null);
@@ -20,6 +22,8 @@ export default function App() {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [recentOps, setRecentOps] = useState([]); // array of { id, severity, msg, ts }
+  const [session, setSession] = useState(false);
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
 
   const selectedEmployee = useMemo(
     () => employees.find((e) => e.employeeId === selectedId) || null,
@@ -43,6 +47,10 @@ export default function App() {
     // restore recent ops from localStorage
     if (typeof window !== "undefined") {
       try {
+        const storedAuth = window.localStorage.getItem(AUTH_TOKEN_KEY);
+        if (storedAuth === "true") {
+          setSession(true);
+        }
         const raw = window.localStorage.getItem(LOCAL_OPS_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
@@ -68,6 +76,40 @@ export default function App() {
     }
   }, [recentOps]);
 
+  const clearAlerts = () => {
+    setRecentOps([]);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(LOCAL_OPS_KEY);
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
+  };
+
+  const handleLogin = (e) => {
+    if (e) e.preventDefault();
+    const ok =
+      loginForm.email.trim().toLowerCase() === DEMO_ADMIN_USER.email &&
+      loginForm.password === DEMO_ADMIN_USER.password;
+    if (ok) {
+      setSession(true);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(AUTH_TOKEN_KEY, "true");
+      }
+    } else {
+      setStatus({ ok: false, msg: "Invalid admin credentials." });
+    }
+  };
+
+  const handleLogout = () => {
+    setSession(false);
+    setStatus(null);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+  };
+
   const isFormValid = () =>
     form.name.trim().length > 0 &&
     form.email.trim().length > 0 &&
@@ -76,7 +118,7 @@ export default function App() {
   const handleOnboard = async (e) => {
     if (e) e.preventDefault();
     if (!isFormValid()) {
-      setStatus({ ok: false, msg: "Please fill name, email, and department." });
+      setStatus({ ok: false, msg: "Please fill name, email, and class." });
       return;
     }
     setStatus(null);
@@ -94,7 +136,7 @@ export default function App() {
         await createEmployee(form);
         setStatus({
           ok: true,
-          msg: "Employee created. EC2 + IAM role are being provisioned.",
+          msg: "Employee created. AD account is being provisioned.",
         });
         setRecentOps((prev) => [
           { id: `op-${Date.now()}`, severity: "success", msg: `Onboarding started for ${form.name}.`, ts: Date.now() },
@@ -203,6 +245,60 @@ export default function App() {
     return a;
   }, [employees, recentOps]);
 
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center px-4">
+        <form
+          onSubmit={handleLogin}
+          className="bg-gray-800 border border-gray-700 rounded-xl p-6 w-full max-w-md space-y-4 shadow-lg"
+        >
+          <div className="text-center">
+            <h1 className="text-2xl font-semibold">Admin Login</h1>
+            <p className="text-gray-400 text-sm mt-2">
+              Sign in to manage onboarding/offboarding.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Admin Email</label>
+            <input
+              type="email"
+              className="w-full rounded bg-gray-900 border border-gray-700 px-3 py-2 text-gray-100"
+              placeholder="admin@narrekappe.com"
+              value={loginForm.email}
+              onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Password</label>
+            <input
+              type="password"
+              className="w-full rounded bg-gray-900 border border-gray-700 px-3 py-2 text-gray-100"
+              placeholder="••••••••"
+              value={loginForm.password}
+              onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+              required
+            />
+          </div>
+          {status?.msg && !status.ok && (
+            <div className="bg-red-900/30 border border-red-500/60 text-red-100 rounded p-3 text-sm">
+              {status.msg}
+            </div>
+          )}
+          <button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium shadow"
+          >
+            Sign In
+          </button>
+          <div className="text-xs text-gray-500 text-center">
+            Demo credentials: {DEMO_ADMIN_USER.email} / {DEMO_ADMIN_USER.password}
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100">
       <nav className="bg-gray-800 border-b border-gray-700 px-6 py-4">
@@ -214,6 +310,12 @@ export default function App() {
             </p>
           </div>
           <div className="text-sm text-gray-300">{defaultAuthUser.name}</div>
+          <button
+            onClick={handleLogout}
+            className="ml-4 text-xs text-gray-400 hover:text-gray-200 border border-gray-600 px-3 py-1 rounded"
+          >
+            Log out
+          </button>
         </div>
       </nav>
 
@@ -278,11 +380,11 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Department</label>
+                <label className="block text-sm text-gray-300 mb-1">Class</label>
                 <input
                   type="text"
                   className="w-full rounded bg-gray-900 border border-gray-700 px-3 py-2 text-gray-100"
-                  placeholder="e.g. Security, Dev, Ops"
+                  placeholder="e.g. Class A, Class B"
                   value={form.department}
                   onChange={(e) => setForm({ ...form, department: e.target.value })}
                   required
@@ -345,12 +447,22 @@ export default function App() {
         </section>
 
         <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
-          <div className="flex items-center gap-3">
-            <i className="fa-solid fa-bell text-red-400 text-lg"></i>
-            <div>
-              <h2 className="text-xl font-semibold">Alerts & Notifications</h2>
-              <p className="text-gray-400 text-sm">Quick health signals and manual checks.</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <i className="fa-solid fa-bell text-red-400 text-lg"></i>
+              <div>
+                <h2 className="text-xl font-semibold">Alerts & Notifications</h2>
+                <p className="text-gray-400 text-sm">Quick health signals and manual checks.</p>
+              </div>
             </div>
+            {alerts.length > 0 && (
+              <button
+                className="text-sm text-gray-300 border border-gray-600 px-3 py-1 rounded hover:text-white"
+                onClick={clearAlerts}
+              >
+                Clear alerts
+              </button>
+            )}
           </div>
 
           <div className="mt-4 space-y-3">

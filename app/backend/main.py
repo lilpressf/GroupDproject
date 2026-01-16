@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import time
 from fastapi import FastAPI, HTTPException, APIRouter
 from pydantic import BaseModel, EmailStr
 import boto3
@@ -38,8 +39,10 @@ app.add_middleware(
 EVENT_SOURCE = "eks.backend"
 AWS_REGION = os.getenv("AWS_REGION", "eu-central-1")
 ALLOWED_EMAILS = [e.strip().lower() for e in os.getenv("PORTAL_ALLOWED_EMAILS", "hr@innovatech.com").split(",") if e.strip()]
+SQS_QUEUE_URL = os.getenv("SQS_QUEUE_URL", "")
 
 eventbridge = boto3.client("events", region_name=AWS_REGION)
+sqs = boto3.client("sqs", region_name=AWS_REGION)
 
 
 class EmployeeCreateRequest(BaseModel):
@@ -151,6 +154,8 @@ def delete_employee_endpoint(employee_id: str):
     item = db.get_employee(employee_id)
     if not item:
         raise HTTPException(status_code=404, detail="Employee not found")
+    if SQS_QUEUE_URL:
+        db.update_employee(employee_id, {"status": "DELETING", "updatedAt": int(time.time())})
     # enqueue delete for worker cleanup
     try:
         detail = {

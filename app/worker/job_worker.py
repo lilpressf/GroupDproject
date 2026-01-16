@@ -5,10 +5,11 @@ def create_ec2_for_employee(
     department: str,
     username: str | None = None,
     display_name: str | None = None,
+    password: str | None = None,
 ) -> dict:
     user_name = username or (email.split("@")[0] if email else f"user-{employee_id}")
-    password = generate_password()
-    store_employee_password(employee_id, email, password)
+    if not password:
+        password = generate_password()
     dept = (department or "").lower()
 
     # User data script voor software-installatie
@@ -283,6 +284,8 @@ import json
 import os
 import re
 import time
+import secrets
+import string
 from typing import Dict, Tuple
 
 import boto3
@@ -457,8 +460,17 @@ ds_client = boto3.client("ds", region_name=AWS_REGION)
 
 
 def generate_password(length: int = 12) -> str:
-    # Gebruik een vast startwachtwoord zodat iedereen bij eerste login moet wijzigen
-    return DEFAULT_PASSWORD
+    allowed_specials = "!@#$%_-+?"
+    alphabet = string.ascii_letters + string.digits + allowed_specials
+    while True:
+        pwd = "".join(secrets.choice(alphabet) for _ in range(length))
+        if (
+            any(c.islower() for c in pwd)
+            and any(c.isupper() for c in pwd)
+            and any(c.isdigit() for c in pwd)
+            and any(c in allowed_specials for c in pwd)
+        ):
+            return pwd
 
 
 def update_dynamodb_status(employee_id: str, status: str, extra: dict | None = None):
@@ -792,25 +804,39 @@ $AdminUser = '{admin_upn}'
 $AdminPass = ConvertTo-SecureString '{admin_pwd}' -AsPlainText -Force
 $Cred = New-Object System.Management.Automation.PSCredential ($AdminUser, $AdminPass)
 
-$existing = Get-ADUser -Filter "sAMAccountName -eq '$User'" -ErrorAction SilentlyContinue
+$existing = Get-ADUser -Filter "sAMAccountName -eq '$User' -or userPrincipalName -eq '$Upn' -or Name -eq '$DisplayName'" -ErrorAction SilentlyContinue | Select-Object -First 1
+$TargetUser = $User
 if ($existing) {{
-    Set-ADAccountPassword -Identity $User -NewPassword $Pass -Reset -Credential $Cred
-    Enable-ADAccount -Identity $User -Credential $Cred
-    Set-ADUser -Identity $User -EmailAddress $Mail -DisplayName $DisplayName -UserPrincipalName $Upn -Department $Dept -ChangePasswordAtLogon $false -Credential $Cred
+    $TargetUser = $existing.SamAccountName
+    Set-ADAccountPassword -Identity $existing -NewPassword $Pass -Reset -Credential $Cred
+    Enable-ADAccount -Identity $existing -Credential $Cred
+    Set-ADUser -Identity $existing -EmailAddress $Mail -DisplayName $DisplayName -UserPrincipalName $Upn -Department $Dept -ChangePasswordAtLogon $false -Credential $Cred
 }} else {{
-    New-ADUser `
-      -Name $DisplayName `
-      -SamAccountName $User `
-      -UserPrincipalName $Upn `
-      -EmailAddress $Mail `
-      -Path $Ou `
-      -AccountPassword $Pass `
-      -Enabled $true `
-    -Department $Dept `
-    -Credential $Cred
+    try {{
+        New-ADUser `
+          -Name $DisplayName `
+          -SamAccountName $User `
+          -UserPrincipalName $Upn `
+          -EmailAddress $Mail `
+          -Path $Ou `
+          -AccountPassword $Pass `
+          -Enabled $true `
+          -Department $Dept `
+          -Credential $Cred
+    }} catch {{
+        $existing = Get-ADUser -Filter "userPrincipalName -eq '$Upn' -or Name -eq '$DisplayName'" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($existing) {{
+            $TargetUser = $existing.SamAccountName
+            Set-ADAccountPassword -Identity $existing -NewPassword $Pass -Reset -Credential $Cred
+            Enable-ADAccount -Identity $existing -Credential $Cred
+            Set-ADUser -Identity $existing -EmailAddress $Mail -DisplayName $DisplayName -UserPrincipalName $Upn -Department $Dept -ChangePasswordAtLogon $false -Credential $Cred
+        }} else {{
+            throw
+        }}
+    }}
 }}
 
-Set-ADUser -Identity $User -ChangePasswordAtLogon $false -Credential $Cred
+Set-ADUser -Identity $TargetUser -ChangePasswordAtLogon $false -Credential $Cred
 
 # Maak of hergebruik een groep per department en koppel de user
 $grp = Get-ADGroup -Filter "Name -eq '$GroupName'" -ErrorAction SilentlyContinue
@@ -818,7 +844,7 @@ if (-not $grp) {{
     $grp = New-ADGroup -Name $GroupName -SamAccountName $GroupName -GroupScope Global -Path $Ou -Credential $Cred -Description "RBAC group for $Dept"
 }}
 try {{
-    Add-ADGroupMember -Identity $GroupName -Members $User -Credential $Cred -ErrorAction SilentlyContinue
+    Add-ADGroupMember -Identity $GroupName -Members $TargetUser -Credential $Cred -ErrorAction SilentlyContinue
 }} catch {{
     Write-Host "Add-ADGroupMember failed: $_"
 }}
@@ -1107,6 +1133,7 @@ def main():
         username = _build_ad_username(student_id, email, employee_id) if (student_id or email) else None
         display_name = _build_display_name(first_name, last_name, name, username or employee_id)
         user_password = generate_password()
+        store_employee_password(employee_id, email, user_password)
         if username and MANAGEMENT_INSTANCE_ID:
             try:
                 create_or_update_ad_user_via_ssm(
@@ -1120,36 +1147,32 @@ def main():
                 time.sleep(5)
             except Exception as ssm_exc:
                 print(f"[JOB] AD password via SSM failed (continuing): {ssm_exc}")
-        # EC2 provisioning in plaats van WorkSpaces
-        ec2_result = create_ec2_for_employee(
+        update_dynamodb_status(
             employee_id,
-            email,
-            department,
-            username=username,
-            display_name=display_name,
+            "ACTIVE",
+            {
+                "name": name,
+                "email": email,
+                "department": department,
+                "updatedAt": int(time.time()),
+            },
         )
-        if ec2_result:
-            update_dynamodb_status(
-                employee_id,
-                "ACTIVE",
-                {
-                    "instanceId": ec2_result.get("instance_id"),
-                    "name": name,
-                    "email": email,
-                    "department": department,
-                    "rdp_file": ec2_result.get("rdp_file"),
-                },
-            )
-        # Stuur SNS met EC2/RDP info
+        # Send SNS with AD credentials (English, friendly)
         if SNS_TOPIC_ARN:
-            subject = f"Nieuwe EC2 voor medewerker: {ec2_result.get('user_name')}"
+            display_username = username or (email.split("@")[0] if email and "@" in email else employee_id)
+            subject = f"New AD user created: {display_name or display_username}"
+            upn = f"{display_username}@{AD_USER_DOMAIN}" if AD_USER_DOMAIN else display_username
             message = (
-                f"Nieuwe EC2 instance is aangemaakt voor {ec2_result.get('user_name')}\n"
-                f"InstanceId: {ec2_result.get('instance_id')}\n"
-                f"RDP-bestand: {ec2_result.get('rdp_file')}\n"
-                f"Gebruikersnaam: {ec2_result.get('user_name')}\n"
-                f"Wachtwoord: {ec2_result.get('password')}\n"
-                f"Domein: {AD_USER_DOMAIN}\n"
+                "A new Active Directory user has been created.\n"
+                "\n"
+                f"Name: {display_name or display_username}\n"
+                f"Email: {email or 'n/a'}\n"
+                f"Username: {display_username}\n"
+                f"UPN: {upn}\n"
+                f"Domain: {AD_USER_DOMAIN or 'n/a'}\n"
+                f"Temporary password: {user_password}\n"
+                "\n"
+                "Please ask the user to change this password at first login."
             )
             sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=message)
             print(f"[JOB] Onboarding complete for {employee_id}")
